@@ -7,13 +7,13 @@
 // With --cache (an earlier latest.json) every run builds on what was found before:
 //   1. link check: all known repos in a few GraphQL requests; deleted ones are kept and
 //      marked gone, renamed or transferred ones move to their new name
-//   2. discovery: new candidates are analysed; known ones are reused unless stale
+//   2. refresh: up to half of --max-fresh re-analyses the stalest known repos
 //      (analysed more than --cache-hours ago, or pushed to since)
-//   3. refresh: what's left of --max-fresh re-analyses the stalest known repos
+//   3. discovery: the rest of --max-fresh goes to new candidates; known ones are reused
 // Nothing found earlier is dropped. --budget-sec stops new work in time to write the files.
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
-import { GitHub, scan, analyze, checkLinks } from "../scanner.js";
+import { GitHub, scan, analyze, checkLinks, loadOriginal } from "../scanner.js";
 import { reportHtml } from "../report.js";
 
 const root = new URL("../", import.meta.url);
@@ -100,43 +100,43 @@ const keepFields = r => {
   return k;
 };
 let newCount = 0;
-const seenNow = new Set();
 const merge = r => {
   const prev = known.get(r.repo);
   if (!prev) newCount++;
-  seenNow.add(r.repo);
   known.set(r.repo, { ...r, ...keepFields(prev), first_seen: prev?.first_seen || today, last_seen: today,
     found_by: [...new Set([...(prev?.found_by || []), ...r.found_by])].sort(),
     ...(r.link == null && !prev?.link && { link: "ok" }) });
 };
 
-// 2. Discovery
-const rotate = a.rotate ? Math.floor(Date.now() / 600e3) : null;
-const meta = await scan({
-  gh, token, rotate, deadline, maxFresh,
-  target: a.target, original: a.original, since: a.since, language: a.language,
-  minStars: +a["min-stars"], perQuery: +a["per-query"], maxRepos: +a["max-repos"],
-  codeSearch: !a["no-code-search"], commitSearch: true,
-  cache: new Map([...known].filter(([, r]) => isFresh(r))),
-}, { log, onResult: merge });
-
-// 3. Refresh the stalest known repos with what's left of the budget
+// 2. Refresh the stalest known repos, with up to half the budget when there are any
+const original = a.original ? await loadOriginal(gh, a.original) : null;
 let refreshed = 0;
-const stale = [...known.values()].filter(r => !isFresh(r) && !seenNow.has(r.repo))
+const stale = [...known.values()].filter(r => !isFresh(r))
   .sort((x, y) => (x.analysed_at || "").localeCompare(y.analysed_at || ""));
+const refreshBudget = maxFresh ? Math.ceil(maxFresh / 2) : stale.length;
 for (const old of stale) {
-  if ((maxFresh && meta.fresh + refreshed >= maxFresh) || (deadline && Date.now() > deadline)) break;
-  const r = await analyze(gh, old.repo, new Set(old.found_by), meta.originalData, null);
+  if (refreshed >= refreshBudget || (deadline && Date.now() > deadline)) break;
+  const r = await analyze(gh, old.repo, new Set(old.found_by), original, null);
   refreshed++;
   if (r) {
     const moved = r.repo !== old.repo; // renamed since the link check: GitHub redirected
     if (moved) known.delete(old.repo);
     known.set(r.repo, { ...r, ...keepFields(old), last_seen: old.last_seen, analysed_at: nowIso(),
       ...(moved && { previously: [...new Set([...(old.previously || []), old.repo])] }) });
-    log(`refreshed ${old.repo} → ${r.combined}`);
+    log(`refreshed ${old.repo} → ${r.combined}${r.product ? " (" + r.product.name + ")" : ""}`);
   }
 }
 if (stale.length) log(`refreshed ${refreshed} of ${stale.length} stale repos`);
+
+// 3. Discovery
+const rotate = a.rotate ? Math.floor(Date.now() / 600e3) : null;
+const meta = await scan({
+  gh, token, rotate, deadline, maxFresh: maxFresh ? Math.max(1, maxFresh - refreshed) : 0,
+  target: a.target, original: a.original, since: a.since, language: a.language,
+  minStars: +a["min-stars"], perQuery: +a["per-query"], maxRepos: +a["max-repos"],
+  codeSearch: !a["no-code-search"], commitSearch: true,
+  cache: new Map([...known].filter(([, r]) => isFresh(r))),
+}, { log, onResult: merge });
 
 // Write
 const results = [...known.values()].sort((x, y) => y.combined - x.combined || y.ai_score - x.ai_score);

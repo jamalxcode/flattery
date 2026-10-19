@@ -157,7 +157,10 @@ export async function discover(gh, opts) {
       const { q } = PRODUCT_QUERIES[(start + i) % PRODUCT_QUERIES.length];
       gh.log(`product search: ${q}`);
       const res = await gh.get("/search/repositories", { q: q + filters, sort: "stars", order: "desc", per_page: opts.perQuery });
-      for (const it of res?.items || []) add(it.full_name, `product: ${q}`, "default_branch" in it && "stargazers_count" in it ? it : null);
+      // Keep only hits whose description itself claims to reimplement a product; these
+      // searches otherwise return lots of projects that merely use it (Power BI dashboards…).
+      for (const it of res?.items || [])
+        if (detectProduct(it.description, "")) add(it.full_name, `product: ${q}`, "default_branch" in it && "stargazers_count" in it ? it : null);
     }
   }
 
@@ -354,7 +357,9 @@ export async function checkLinks(gh, names) {
     const errs = new Map((res.errors || []).map(e => [e.path?.[0], e.type || e.message]));
     batch.forEach((n, j) => {
       const r = res.data[`r${j}`];
-      if (!r) return out.set(n, { status: "gone", reason: errs.get(`r${j}`) || "NOT_FOUND" });
+      // Gone only when GitHub names this repo in an error (NOT_FOUND, …); an empty
+      // answer without one (outage, permissions) leaves it unchecked this run.
+      if (!r) return errs.has(`r${j}`) && out.set(n, { status: "gone", reason: errs.get(`r${j}`) });
       const renamed = r.nameWithOwner.toLowerCase() !== n.toLowerCase();
       out.set(n, {
         status: renamed ? "renamed" : r.isArchived ? "archived" : "ok",
