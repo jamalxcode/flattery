@@ -1,5 +1,7 @@
 // Flattery scanner: finds likely AI-built reimplementations on GitHub and scores them.
-// Runs in the browser against api.github.com with the viewer's own token.
+// Runs in the browser against api.github.com, with the viewer's token if they give one.
+// Without a token GitHub allows 60 core requests an hour and no code search, so each repo
+// is kept to ~2 API calls: metadata comes from search results, READMEs from raw.githubusercontent.com.
 // Each repo gets two 0-100 scores; `combined` is their geometric mean, so both must be present.
 
 const API = "https://api.github.com";
@@ -57,6 +59,8 @@ const REPO_QUERIES_TARGET = [
 const CODE_QUERIES = ["path:CLAUDE.md", "path:AGENTS.md", "path:.cursorrules", "path:.github/copilot-instructions.md"];
 const COMMIT_QUERIES = ['"Co-Authored-By: Claude"', '"Generated with Claude Code"'];
 
+export class RateLimitError extends Error {}
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const basename = p => p.slice(p.lastIndexOf("/") + 1);
 
@@ -77,7 +81,7 @@ export class GitHub {
       try {
         this.calls++;
         res = await fetch(url, {
-          headers: { Accept: accept, Authorization: `Bearer ${this.token}`, "X-GitHub-Api-Version": "2022-11-28" },
+          headers: { Accept: accept, "X-GitHub-Api-Version": "2022-11-28", ...(this.token && { Authorization: `Bearer ${this.token}` }) },
           signal: this.signal,
         });
       } catch (e) {
@@ -89,6 +93,8 @@ export class GitHub {
       if (res.status === 401) throw new Error("GitHub rejected the token (401). Check it and try again.");
       if (res.status === 403 || res.status === 429) {
         const wait = await this.rateLimitWait(res);
+        if (wait != null && wait > 120 && !this.token)
+          throw new RateLimitError(`hit GitHub's limit of 60 requests an hour without a token (resets in ${Math.ceil(wait / 60)} min)`);
         if (wait != null) {
           this.log(`rate limited, waiting ${wait}s…`, "warn");
           await sleep(wait * 1000);
@@ -111,15 +117,16 @@ export class GitHub {
       wait = Math.max(1, +h.get("x-ratelimit-reset") - Math.floor(Date.now() / 1000) + 1);
     else if (/rate limit/i.test(await res.text())) wait = 30;
     else return null;
-    return Math.min(wait, 300);
+    return this.token ? Math.min(wait, 300) : wait;
   }
 }
 
 export async function discover(gh, opts) {
   const found = new Map();
-  const add = (name, why) => {
-    if (!found.has(name)) found.set(name, new Set());
-    found.get(name).add(why);
+  const add = (name, why, meta) => {
+    if (!found.has(name)) found.set(name, { why: new Set(), meta: null });
+    found.get(name).why.add(why);
+    if (meta) found.get(name).meta = meta;
   };
   const filters = (opts.since ? ` created:>=${opts.since}` : "") +
     (opts.language ? ` language:${opts.language}` : "") +
@@ -130,7 +137,7 @@ export async function discover(gh, opts) {
   for (const q of repoQueries) {
     gh.log(`repo search: ${q}`);
     const res = await gh.get("/search/repositories", { q: q + filters, sort: "stars", order: "desc", per_page: opts.perQuery });
-    for (const it of res?.items || []) add(it.full_name, `repo: ${q}`);
+    for (const it of res?.items || []) add(it.full_name, `repo: ${q}`, "default_branch" in it && "stargazers_count" in it ? it : null);
   }
   if (opts.codeSearch) {
     for (const q of CODE_QUERIES) {
@@ -153,6 +160,19 @@ export async function discover(gh, opts) {
   return found;
 }
 
+// raw.githubusercontent.com isn't API rate limited, so try it before the API.
+async function fetchReadme(gh, fullName, branch, paths) {
+  const file = paths.find(p => /^readme(\.\w+)?$/i.test(p));
+  if (!file) return "";
+  try {
+    const res = await fetch(`https://raw.githubusercontent.com/${fullName}/${encodeURIComponent(branch)}/${encodeURI(file)}`, { signal: gh.signal });
+    if (res.ok) return res.text();
+  } catch (e) {
+    if (e.name === "AbortError") throw e;
+  }
+  return (await gh.get(`/repos/${fullName}/readme`, null, { accept: "application/vnd.github.raw+json", raw: true })) || "";
+}
+
 async function treePaths(gh, fullName, branch) {
   const t = await gh.get(`/repos/${fullName}/git/trees/${encodeURIComponent(branch)}`, { recursive: "1" });
   return t ? { paths: t.tree.map(x => x.path), truncated: !!t.truncated } : { paths: [], truncated: false };
@@ -170,8 +190,9 @@ export async function loadOriginal(gh, fullName) {
   };
 }
 
-export async function analyze(gh, fullName, foundBy, original) {
-  const meta = await gh.get(`/repos/${fullName}`);
+// Repo search results carry the full repo object; others need one extra call.
+export async function analyze(gh, fullName, foundBy, original, knownMeta) {
+  const meta = knownMeta || await gh.get(`/repos/${fullName}`);
   if (!meta || meta.fork) return null;
   const r = {
     repo: meta.full_name,
@@ -233,7 +254,7 @@ export async function analyze(gh, fullName, foundBy, original) {
   }
 
   // README: reimplementation claims and style
-  const readme = (await gh.get(`/repos/${fullName}/readme`, null, { accept: "application/vnd.github.raw+json", raw: true })) || "";
+  const readme = await fetchReadme(gh, meta.full_name, meta.default_branch || "main", paths);
   const text = r.description + "\n" + readme;
   const claims = CLAIMS.filter(([rx]) => rx.test(text)).map(([, l]) => l);
   if (claims.length) {
@@ -285,9 +306,18 @@ export async function analyze(gh, fullName, foundBy, original) {
 // Discover candidates, then analyse them with a small worker pool.
 export async function scan(opts, { log, onResult, signal }) {
   const gh = new GitHub(opts.token, log, signal);
-  const me = await gh.get("/user");
-  if (!me) throw new Error("Could not read your GitHub user. Check the token.");
-  log(`signed in as ${me.login}`);
+  if (opts.token) {
+    const me = await gh.get("/user");
+    if (!me) throw new Error("Could not read your GitHub user. Check the token.");
+    log(`signed in as ${me.login}`);
+  } else {
+    opts.codeSearch = false;
+    const rl = await gh.get("/rate_limit"); // free: doesn't count against the limit
+    const left = rl?.resources?.core?.remaining ?? 60;
+    opts.maxRepos = Math.min(opts.maxRepos, Math.max(1, Math.floor((left - (opts.original ? 2 : 0)) / 2)));
+    log(`no token: code search off, ${left} requests left this hour, analysing up to ${opts.maxRepos} repos`, "warn");
+    if (left < 3) throw new RateLimitError("no requests left this hour without a token. Add a token or try again later.");
+  }
 
   let original = null;
   if (opts.original) {
@@ -297,20 +327,28 @@ export async function scan(opts, { log, onResult, signal }) {
   }
   const found = await discover(gh, opts);
   if (original) found.delete(original.repo);
-  const names = [...found.keys()].sort((a, b) => found.get(b).size - found.get(a).size).slice(0, opts.maxRepos);
+  const names = [...found.keys()].sort((a, b) => found.get(b).why.size - found.get(a).why.size).slice(0, opts.maxRepos);
   log(`${found.size} candidates, analysing ${names.length}`);
 
-  let next = 0, done = 0;
+  let next = 0, done = 0, limitHit = null;
   const worker = async () => {
-    while (next < names.length) {
+    while (next < names.length && !limitHit) {
       const name = names[next++];
-      const r = await analyze(gh, name, found.get(name), original);
+      let r;
+      try {
+        r = await analyze(gh, name, found.get(name).why, original, found.get(name).meta);
+      } catch (e) {
+        if (!(e instanceof RateLimitError)) throw e;
+        limitHit = limitHit || e;
+        return;
+      }
       done++;
       log(`[${done}/${names.length}] ${name}${r ? ` → ${r.combined}` : " (skipped)"}`);
       if (r) onResult(r);
     }
   };
   await Promise.all(Array.from({ length: 4 }, worker));
+  if (limitHit) log(`stopped early: ${limitHit.message}. Add a token to scan more.`, "warn");
   log(`done, ${gh.calls} API calls`, "ok");
   return { target: opts.target, original: original?.repo || "" };
 }

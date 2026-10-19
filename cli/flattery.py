@@ -342,6 +342,27 @@ def analyze(gh, full_name, found_by, original=None):
     return r
 
 
+def load_cache(path, original, now, hours):
+    """Results from an earlier run that are recent enough to reuse, keyed by repo."""
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    if isinstance(data, list):
+        data = {"info": {}, "results": data}
+    if (data.get("info", {}).get("original") or "") != (original or ""):
+        return {}  # original-repo comparisons differ, so nothing carries over
+    keep = {}
+    for r in data.get("results", []):
+        ts = parse_ts(r.get("analysed_at"))
+        if ts and (now - ts).total_seconds() < hours * 3600:
+            keep[r["repo"]] = r
+    return keep
+
+
 def load_original(gh, full_name):
     meta = gh.get(f"/repos/{full_name}")
     if not meta:
@@ -573,13 +594,17 @@ def main():
     ap.add_argument("--skip-code-search", action="store_true")
     ap.add_argument("--skip-commit-search", action="store_true")
     ap.add_argument("--token", default=os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"))
-    ap.add_argument("--json", help="also write raw results as JSON to this path")
+    ap.add_argument("--json", help="also write {info, results} as JSON to this path (the web app's data format)")
+    ap.add_argument("--cache", help="earlier --json output; repos analysed there recently are reused instead of re-fetched")
+    ap.add_argument("--cache-hours", type=float, default=6, help="how long a cached analysis stays fresh (default 6)")
+    ap.add_argument("--max-fresh", type=int, default=0, help="cap on repos fetched fresh this run; the rest come from cache or wait (0 = no cap)")
     ap.add_argument("-o", "--output", default="flattery_report.html")
     ap.add_argument("--demo", action="store_true", help="write a report from built-in sample data, no network")
     ap.add_argument("-q", "--quiet", action="store_true")
     args = ap.parse_args()
 
-    info = {"generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "target": args.target or "",
+    now = datetime.now(timezone.utc)
+    info = {"generated": now.strftime("%Y-%m-%d %H:%M UTC"), "generated_iso": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "target": args.target or "",
             "original": args.original or "", "title": "Flattery report"}
 
     if args.demo:
@@ -598,20 +623,30 @@ def main():
             found.pop(original["repo"], None)
         names = sorted(found, key=lambda n: -len(found[n]["found_by"]))[: args.max_repos]
         gh.log(f"\n{len(found)} candidates, analysing {len(names)}")
-        results = []
+        cache = load_cache(args.cache, args.original, now, args.cache_hours)
+        results, fresh, reused = [], 0, 0
         for i, name in enumerate(names, 1):
-            gh.log(f"[{i}/{len(names)}] {name}")
-            r = analyze(gh, name, found[name]["found_by"], original)
+            if name in cache:
+                r = dict(cache[name], found_by=sorted(found[name]["found_by"]))
+                reused += 1
+            elif args.max_fresh and fresh >= args.max_fresh:
+                continue
+            else:
+                gh.log(f"[{i}/{len(names)}] {name}")
+                r = analyze(gh, name, found[name]["found_by"], original)
+                fresh += 1
+                if r:
+                    r["analysed_at"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
             if r and not r["fork"]:
                 results.append(r)
-        gh.log(f"done, {gh.calls} API calls")
+        gh.log(f"done, {fresh} fetched, {reused} from cache, {gh.calls} API calls")
 
     results.sort(key=lambda r: (-r["combined"], -r["ai_score"]))
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(render_html(results, info))
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
+            json.dump({"info": info, "results": results}, f, ensure_ascii=False)
     print(f"wrote {args.output} ({len(results)} repos)")
 
 

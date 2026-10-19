@@ -16,10 +16,21 @@
     <p class="lead">Finds GitHub projects that look like AI-built (“vibe coded”) reimplementations of existing software, and shows the evidence for each one.</p>
   </header>
 
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" id="tabLive" aria-selected="true">Latest scan</button>
+    <button type="button" role="tab" id="tabOwn" aria-selected="false">Run your own scan</button>
+  </nav>
+
+  <section id="livePane">
+    <p class="status" id="liveStatus">Loading the latest scan…</p>
+    <div id="live"></div>
+  </section>
+
+  <section id="ownPane" hidden>
   <form class="panel" id="form" autocomplete="off">
     <div class="grid">
-      <label class="field">GitHub token
-        <input type="password" id="token" placeholder="ghp_… or github_pat_…" required>
+      <label class="field">GitHub token (optional)
+        <input type="password" id="token" placeholder="ghp_… or github_pat_…">
       </label>
       <label class="field">Target project name (optional)
         <input id="target" placeholder="e.g. redis, ffmpeg, chardet">
@@ -47,7 +58,7 @@
       </label>
     </div>
     <div class="checks">
-      <label><input type="checkbox" id="codeSearch" checked> code search for agent files (slower: 10 req/min)</label>
+      <label><input type="checkbox" id="codeSearch" checked> code search for agent files (needs a token; 10 req/min)</label>
       <label><input type="checkbox" id="commitSearch" checked> commit search for AI co-author trailers</label>
       <label><input type="checkbox" id="remember"> remember token on this device</label>
     </div>
@@ -58,13 +69,14 @@
       <button type="button" id="dlHtml" disabled>Download HTML report</button>
       <button type="button" id="dlJson" disabled>Download JSON</button>
     </div>
-    <p class="hint">The token stays in your browser and is sent only to api.github.com. A fine-grained token with no extra permissions is enough
-      (public repo read). <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create one</a>.
-      Each repo costs about 4 API calls; a full scan takes a few minutes.</p>
+    <p class="hint">Works without a token, but GitHub then allows only 60 requests an hour from your network (about 25 repos) and no code search.
+      A token raises that to 5,000 an hour. It stays in your browser and is sent only to api.github.com; a fine-grained token with no extra permissions is enough.
+      <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create one</a>.</p>
     <div class="log" id="log" hidden></div>
   </form>
 
   <div id="report"></div>
+  </section>
 
   <div class="note">
     <b>How to read this.</b> <span style="color:var(--ai)">AI-built</span> counts agent config files (CLAUDE.md, AGENTS.md, .cursorrules…),

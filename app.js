@@ -49,7 +49,7 @@ function setRunning(on) {
 $("form").addEventListener("submit", async e => {
   e.preventDefault();
   const token = $("token").value.trim();
-  store.set("flattery.token", token, $("remember").checked);
+  if (token) store.set("flattery.token", token, $("remember").checked);
   const opts = {
     token,
     target: $("target").value.trim(),
@@ -84,6 +84,7 @@ $("stop").addEventListener("click", () => controller?.abort());
 $("demo").addEventListener("click", () => {
   results = demoResults();
   info = { demo: true };
+  selectTab(true);
   setRunning(false);
   show();
 });
@@ -154,3 +155,51 @@ function demoResults() {
 }
 
 show();
+
+// Tabs
+function selectTab(own) {
+  $("tabLive").setAttribute("aria-selected", !own);
+  $("tabOwn").setAttribute("aria-selected", own);
+  $("livePane").hidden = own;
+  $("ownPane").hidden = !own;
+}
+$("tabLive").addEventListener("click", () => selectTab(false));
+$("tabOwn").addEventListener("click", () => selectTab(true));
+
+// Latest scan, published by the scheduled workflow every 10 minutes. The page keeps
+// showing the last scan and swaps in a newer one when it appears.
+const INTERVAL_MIN = 10;
+let live = null;
+
+function ago(ms) {
+  const m = Math.round(ms / 60000);
+  return m < 1 ? "just now" : m === 1 ? "1 minute ago" : m < 120 ? `${m} minutes ago` : `${Math.round(m / 60)} hours ago`;
+}
+
+function liveStatus() {
+  if (!live) return;
+  const at = Date.parse(live.info.generated_iso);
+  const next = at + INTERVAL_MIN * 60000 - Date.now();
+  const when = next > 60000 ? `next in about ${Math.ceil(next / 60000)} min` : "next one due now";
+  $("liveStatus").innerHTML = `Automatic scan, updated <b>${ago(Date.now() - at)}</b> · ${when} · ` +
+    `<a href="data/latest.html" target="_blank" rel="noopener">standalone report</a> · <a href="data/latest.json" target="_blank" rel="noopener">JSON</a>`;
+}
+
+async function loadLive() {
+  try {
+    const res = await fetch("data/latest.json?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    if (!live || data.info.generated_iso !== live.info.generated_iso) {
+      live = data;
+      renderReport($("live"), live.results, live.info);
+    }
+    liveStatus();
+  } catch {
+    if (!live) $("liveStatus").textContent = "No automatic scan has been published yet. Run your own scan in the meantime.";
+  }
+}
+
+loadLive();
+setInterval(loadLive, 2 * 60000);
+setInterval(liveStatus, 30000);
