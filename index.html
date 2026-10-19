@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flattery</title>
+<meta name="description" content="Find AI-built (vibe coded) reimplementations of software on GitHub.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪞</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Flattery</h1>
+    <blockquote>“Imitation is the sincerest form of flattery that mediocrity can pay to greatness.”<cite>— Oscar Wilde</cite></blockquote>
+    <p class="lead">Finds GitHub projects that look like AI-built (“vibe coded”) reimplementations of existing software, and shows the evidence for each one.</p>
+  </header>
+
+  <form class="panel" id="form" autocomplete="off">
+    <div class="grid">
+      <label class="field">GitHub token
+        <input type="password" id="token" placeholder="ghp_… or github_pat_…" required>
+      </label>
+      <label class="field">Target project name (optional)
+        <input id="target" placeholder="e.g. redis, ffmpeg, chardet">
+      </label>
+      <label class="field">Original repo to compare with (optional)
+        <input id="original" placeholder="owner/repo, e.g. redis/redis" pattern="[\w.\-]+/[\w.\-]+">
+      </label>
+      <label class="field">Created on or after
+        <input type="date" id="since">
+      </label>
+      <label class="field">Language
+        <input id="language" placeholder="any">
+      </label>
+      <label class="field">Minimum stars
+        <input type="number" id="minStars" min="0" value="0">
+      </label>
+      <label class="field">Results per query
+        <input type="number" id="perQuery" min="5" max="100" value="20">
+      </label>
+      <label class="field">Max repos to analyse
+        <input type="number" id="maxRepos" min="1" max="500" value="60">
+      </label>
+      <label class="field">Also analyse these repos (one owner/repo per line)
+        <textarea id="repos" rows="1"></textarea>
+      </label>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="codeSearch" checked> code search for agent files (slower: 10 req/min)</label>
+      <label><input type="checkbox" id="commitSearch" checked> commit search for AI co-author trailers</label>
+      <label><input type="checkbox" id="remember"> remember token on this device</label>
+    </div>
+    <div class="actions">
+      <button type="submit" class="primary" id="run">Scan GitHub</button>
+      <button type="button" id="stop" disabled>Stop</button>
+      <button type="button" id="demo">Show demo</button>
+      <button type="button" id="dlHtml" disabled>Download HTML report</button>
+      <button type="button" id="dlJson" disabled>Download JSON</button>
+    </div>
+    <p class="hint">The token stays in your browser and is sent only to api.github.com. A fine-grained token with no extra permissions is enough
+      (public repo read). <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create one</a>.
+      Each repo costs about 4 API calls; a full scan takes a few minutes.</p>
+    <div class="log" id="log" hidden></div>
+  </form>
+
+  <div id="report"></div>
+
+  <div class="note">
+    <b>How to read this.</b> <span style="color:var(--ai)">AI-built</span> counts agent config files (CLAUDE.md, AGENTS.md, .cursorrules…),
+    AI co-author trailers in recent commits, burst or big-bang commit history and typical README style.
+    <span style="color:var(--re)">Reimplementation</span> counts claims like “drop-in replacement”, “clean-room”, “rewrite of” and “compatible with”.
+    The combined score is the geometric mean of the two, so a repo needs both to score high. <span style="color:var(--orig)">Original</span> chips appear when you
+    name an original repo. A changed license or a high file-name overlap is a reason to check provenance by hand, not proof of copying.
+    The scores are heuristics: a repo with no signals isn't necessarily human-written, and one with many signals isn't necessarily a legal problem.
+    A command-line version is in <a href="https://github.com/jamalxcode/flattery/tree/main/cli">cli/</a>.
+  </div>
+</div>
+<script src="render.js"></script>
+<script type="module" src="app.js"></script>
+<!-- GoatCounter analytics (not loaded on localhost; paths are prefixed with the host so all *.sala.company apps share one dashboard) -->
+<script>
+  (function () {
+    if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return;
+    window.goatcounter = { endpoint: 'https://salacompany.goatcounter.com/count', path: function (p) { return location.host + p; } };
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://gc.zgo.at/count.js';
+    s.setAttribute('data-goatcounter', 'https://salacompany.goatcounter.com/count');
+    document.body.appendChild(s);
+  })();
+</script>
+</body>
+</html>
