@@ -6,7 +6,7 @@ Finds GitHub projects that look like AI-built ("vibe coded") reimplementations o
 
 **Run it in the browser:** https://jamalxcode.github.io/flattery/
 
-**Latest scan** shows a broad scan that a GitHub Action runs every 10 minutes and publishes with the site, so it needs no token. Until the next scan lands, the page shows the previous one, and an open page swaps in the new one by itself. The same results are at [`data/latest.html`](https://jamalxcode.github.io/flattery/data/latest.html) and [`data/latest.json`](https://jamalxcode.github.io/flattery/data/latest.json).
+**Latest scan** shows a broad scan that a GitHub Action runs every 10 minutes and publishes with the site, so it needs no token. Until the next scan lands, the page shows the previous one, and an open page swaps in the new one by itself. The scan runs `tools/scan.mjs` with the same `scanner.js` the page uses. The same results are at [`data/latest.html`](https://jamalxcode.github.io/flattery/data/latest.html) and [`data/latest.json`](https://jamalxcode.github.io/flattery/data/latest.json).
 
 **Run your own scan** lets you name a target project, e.g. `redis`, and the original repo, e.g. `redis/redis`. A token is optional: without one GitHub allows 60 requests an hour (about 25 repos) and no code search; a fine-grained token with no extra permissions raises that to 5,000. The token stays in your browser and is sent only to `api.github.com`. Results can be downloaded as a standalone HTML report or as JSON.
 
@@ -32,16 +32,12 @@ These are heuristics. A high score is a reason to look closer, not proof of copy
 - Commit search for `Co-Authored-By: Claude` / `Generated with Claude Code`
 - Any repos you list by hand
 
-## Command line
+## Running a scan locally
 
-`cli/flattery.py` does the same scan from a terminal (Python 3, standard library only) and writes an HTML report:
+Node 20 or newer, no dependencies:
 
 ```sh
-export GITHUB_TOKEN=github_pat_...
-python3 cli/flattery.py --target redis --original redis/redis -o redis.html
-python3 cli/flattery.py --since 2026-01-01 --language rust --max-repos 100
-python3 cli/flattery.py --demo          # sample report, no network
-python3 cli/flattery.py --json data.json --cache data.json   # reuse analyses from the last run
+GITHUB_TOKEN=github_pat_... node tools/scan.mjs --target redis --original redis/redis --out out
 ```
 
-Run `python3 cli/flattery.py --help` for all options.
+This writes `out/latest.json` and `out/latest.html`. Other options: `--since`, `--language`, `--min-stars`, `--max-repos`, `--no-code-search`, and `--cache <earlier latest.json>` with `--max-fresh` and `--cache-hours` to reuse recent analyses.

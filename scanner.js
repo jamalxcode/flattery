@@ -304,12 +304,14 @@ export async function analyze(gh, fullName, foundBy, original, knownMeta) {
 }
 
 // Discover candidates, then analyse them with a small worker pool.
+// opts.cache (Map repo -> earlier result) and opts.maxFresh let the scheduled scan
+// reuse recent analyses instead of re-fetching every repo on every run.
 export async function scan(opts, { log, onResult, signal }) {
   const gh = new GitHub(opts.token, log, signal);
   if (opts.token) {
+    // A bad token throws (401) here; an Actions token can't read /user but is fine.
     const me = await gh.get("/user");
-    if (!me) throw new Error("Could not read your GitHub user. Check the token.");
-    log(`signed in as ${me.login}`);
+    log(me ? `signed in as ${me.login}` : "using an app token");
   } else {
     opts.codeSearch = false;
     const rl = await gh.get("/rate_limit"); // free: doesn't count against the limit
@@ -330,13 +332,22 @@ export async function scan(opts, { log, onResult, signal }) {
   const names = [...found.keys()].sort((a, b) => found.get(b).why.size - found.get(a).why.size).slice(0, opts.maxRepos);
   log(`${found.size} candidates, analysing ${names.length}`);
 
-  let next = 0, done = 0, limitHit = null;
+  let next = 0, done = 0, fresh = 0, reused = 0, limitHit = null;
   const worker = async () => {
     while (next < names.length && !limitHit) {
       const name = names[next++];
+      const cached = opts.cache?.get(name);
+      if (cached) {
+        reused++;
+        onResult({ ...cached, found_by: [...found.get(name).why].sort() });
+        continue;
+      }
+      if (opts.maxFresh && fresh >= opts.maxFresh) continue;
+      fresh++;
       let r;
       try {
         r = await analyze(gh, name, found.get(name).why, original, found.get(name).meta);
+        if (r) r.analysed_at = new Date().toISOString().replace(/\.\d+Z$/, "Z");
       } catch (e) {
         if (!(e instanceof RateLimitError)) throw e;
         limitHit = limitHit || e;
@@ -349,6 +360,6 @@ export async function scan(opts, { log, onResult, signal }) {
   };
   await Promise.all(Array.from({ length: 4 }, worker));
   if (limitHit) log(`stopped early: ${limitHit.message}. Add a token to scan more.`, "warn");
-  log(`done, ${gh.calls} API calls`, "ok");
+  log(`done, ${gh.calls} API calls${opts.cache ? `, ${fresh} fetched, ${reused} from cache` : ""}`, "ok");
   return { target: opts.target, original: original?.repo || "" };
 }

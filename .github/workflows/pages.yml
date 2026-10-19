@@ -16,6 +16,8 @@ jobs:
     environment: { name: github-pages, url: "${{ steps.deployment.outputs.page_url }}" }
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
       - uses: actions/configure-pages@v5
         id: pages
       - name: Fetch the previous scan
@@ -24,12 +26,10 @@ jobs:
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           mkdir -p data
-          if ! python3 cli/flattery.py -q --max-repos 120 --max-fresh 30 \
-               --cache "$RUNNER_TEMP/prev.json" --json data/latest.json -o data/latest.html; then
+          if ! node tools/scan.mjs --max-repos 120 --max-fresh 30 --cache "$RUNNER_TEMP/prev.json" --out data; then
             echo "::warning::scan failed, republishing the previous scan"
             [ -s "$RUNNER_TEMP/prev.json" ] && cp "$RUNNER_TEMP/prev.json" data/latest.json
           fi
-          python3 -c "import json; d=json.load(open('data/latest.json')); print(len(d['results']), 'repos,', d['info']['generated'])" || rm -f data/latest.json
       - uses: actions/upload-pages-artifact@v3
         with: { path: . }
       - id: deployment

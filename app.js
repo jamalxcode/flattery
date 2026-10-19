@@ -1,4 +1,5 @@
 import { scan } from "./scanner.js";
+import { reportHtml } from "./report.js";
 
 const $ = id => document.getElementById(id);
 const report = $("report");
@@ -103,20 +104,8 @@ $("dlJson").addEventListener("click", () => download(slug() + ".json", JSON.stri
 
 // A standalone report: the same stylesheet and renderer inlined, with the data embedded.
 $("dlHtml").addEventListener("click", async () => {
-  const [css, js] = await Promise.all(["style.css", "render.js"].map(f => fetch(f).then(r => r.text())));
-  const safe = v => JSON.stringify(v).replace(/</g, "\\u003c");
-  const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flattery report</title><style>${css}</style></head>
-<body><div class="wrap">
-<header><h1>Flattery report</h1>
-<blockquote>“Imitation is the sincerest form of flattery that mediocrity can pay to greatness.”<cite>— Oscar Wilde</cite></blockquote></header>
-<div id="report"></div>
-<div class="note">${document.querySelector(".note").innerHTML}</div>
-</div>
-<script>${js}
-renderReport(document.getElementById("report"), ${safe(results)}, ${safe(info)});
-<\/script></body></html>`;
+  const [css, renderJs] = await Promise.all(["style.css", "render.js"].map(f => fetch(f).then(r => r.text())));
+  const html = reportHtml({ css, renderJs, noteHtml: document.querySelector(".note").innerHTML, results, info });
   download(slug() + ".html", html, "text/html");
 });
 
