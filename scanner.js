@@ -4,6 +4,8 @@
 // is kept to ~2 API calls: metadata comes from search results, READMEs from raw.githubusercontent.com.
 // Each repo gets two 0-100 scores; `combined` is their geometric mean, so both must be present.
 
+import { detectProduct, PRODUCT_QUERIES } from "./products.js";
+
 const API = "https://api.github.com";
 
 // [regex over repo paths, label, points]
@@ -58,6 +60,8 @@ const REPO_QUERIES_TARGET = [
 ];
 const CODE_QUERIES = ["path:CLAUDE.md", "path:AGENTS.md", "path:.cursorrules", "path:.github/copilot-instructions.md"];
 const COMMIT_QUERIES = ['"Co-Authored-By: Claude"', '"Generated with Claude Code"'];
+
+export const productLabel = p => p.vendor === p.name ? p.name : `${p.vendor} ${p.name}`;
 
 export class RateLimitError extends Error {}
 
@@ -145,6 +149,17 @@ export async function discover(gh, opts) {
     (opts.minStars ? ` stars:>=${opts.minStars}` : "") + " fork:false";
   const t = opts.target;
   const repoQueries = (t ? REPO_QUERIES_TARGET.map(q => q.replaceAll("{t}", t)) : REPO_QUERIES_BROAD).concat(opts.queries || []);
+
+  // Scheduled scans also look for clones of well-known products, a few per run in turn.
+  if (opts.rotate != null && !t) {
+    const per = 4, start = (opts.rotate * per) % PRODUCT_QUERIES.length;
+    for (let i = 0; i < per; i++) {
+      const { q } = PRODUCT_QUERIES[(start + i) % PRODUCT_QUERIES.length];
+      gh.log(`product search: ${q}`);
+      const res = await gh.get("/search/repositories", { q: q + filters, sort: "stars", order: "desc", per_page: opts.perQuery });
+      for (const it of res?.items || []) add(it.full_name, `product: ${q}`, "default_branch" in it && "stargazers_count" in it ? it : null);
+    }
+  }
 
   for (const q of repoQueries) {
     gh.log(`repo search: ${q}`);
@@ -272,6 +287,11 @@ export async function analyze(gh, fullName, foundBy, original, knownMeta) {
   const readme = await fetchReadme(gh, meta.full_name, meta.default_branch || "main", paths);
   const text = r.description + "\n" + readme;
   const claims = CLAIMS.filter(([rx]) => rx.test(text)).map(([, l]) => l);
+  r.product = detectProduct(r.description, readme);
+  if (r.product) {
+    re += 20;
+    sig(r.reimpl_signals, `reimplements ${productLabel(r.product)}`, 20);
+  }
   if (claims.length) {
     pts = Math.min(100, CLAIM_POINTS * claims.length + 10);
     re += pts;
@@ -371,7 +391,9 @@ export async function scan(opts, { log, onResult, signal }) {
   }
   const found = await discover(gh, opts);
   if (original) found.delete(original.repo);
-  const names = [...found.keys()].sort((a, b) => found.get(b).why.size - found.get(a).why.size).slice(0, opts.maxRepos);
+  // Product-search hits first, then by how many searches found the repo.
+  const rank = n => found.get(n).why.size + ([...found.get(n).why].some(w => w.startsWith("product:")) ? 100 : 0);
+  const names = [...found.keys()].sort((a, b) => rank(b) - rank(a)).slice(0, opts.maxRepos);
   log(`${found.size} candidates, analysing ${names.length}`);
 
   let next = 0, done = 0, fresh = 0, reused = 0, limitHit = null;

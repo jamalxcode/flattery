@@ -91,8 +91,9 @@ if (known.size && token) {
   log(`links: ${links.size} checked, ${counts.gone} newly gone, ${counts.renamed} renamed, ${counts.archived} newly archived, ${counts.returned} back`);
 }
 
-const isFresh = r => r.link === "gone" ||
-  (Date.parse(r.analysed_at) > Date.now() - staleMs && !(r.pushed_at && r.pushed_at > r.analysed_at));
+// Analyses from before product detection (no `product` field) count as stale.
+const isFresh = r => r.link === "gone" || (r.product !== undefined &&
+  Date.parse(r.analysed_at) > Date.now() - staleMs && !(r.pushed_at && r.pushed_at > r.analysed_at));
 const keepFields = r => {
   const k = {};
   for (const f of ["first_seen", "link", "previously", "gone_since", "link_reason", "link_checked", "pushed_at"]) if (r?.[f] != null) k[f] = r[f];

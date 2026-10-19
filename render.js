@@ -18,6 +18,10 @@ function renderReport(root, DATA, INFO) {
           <option value="stars">Stars</option>
           <option value="created">Newest</option>
         </select></label>
+        <label>Kind <select data-r="kind">
+          <option value="retail">retail product clones</option><option value="all">all repos</option>
+        </select></label>
+        <label data-r="productWrap">Product <select data-r="product"></select></label>
         <label>Show <select data-r="show">
           <option value="live">live repos</option><option value="all">all, incl. removed</option><option value="changed">removed, renamed or archived</option>
         </select></label>
@@ -27,17 +31,25 @@ function renderReport(root, DATA, INFO) {
       </div>
       <div data-r="list"></div>`;
     root.dataset.ready = "1";
-    root.querySelectorAll("[data-r=q],[data-r=sort],[data-r=min],[data-r=show]").forEach(el => el.addEventListener("input", () => renderReport(root, DATA, INFO)));
+    root.querySelectorAll("[data-r=q],[data-r=sort],[data-r=min],[data-r=show],[data-r=kind],[data-r=product]").forEach(el => el.addEventListener("input", () => renderReport(root, DATA, INFO)));
   }
   const $ = k => root.querySelector(`[data-r=${k}]`);
+  // A new data set opens on retail clones when it has any
+  if (root._data !== DATA) {
+    root._data = DATA;
+    $("kind").value = DATA.some(r => r.product) ? "retail" : "all";
+  }
 
   $("sub").textContent = `${INFO.generated ? "Generated " + INFO.generated + " · " : ""}${DATA.length} repositories analysed` +
     (INFO.target ? ` · target: “${INFO.target}”` : "") + (INFO.original ? ` · original: ${INFO.original}` : "");
   $("banner").innerHTML = INFO.demo ? '<div class="banner">Demo data. These repositories are invented to preview the layout.</div>' : "";
 
+  const label = p => p.vendor === p.name ? p.name : `${p.vendor} ${p.name}`;
   const n = k => DATA.filter(r => r[k] >= 60).length;
+  const retail = DATA.filter(r => r.product && r.link !== "gone");
   const stats = [
     [DATA.length, "repos analysed"],
+    [retail.length, `retail product clones (${new Set(retail.map(r => r.product.name)).size} products)`],
     [n("combined"), "likely AI-built reimplementations (60+)"],
     [n("ai_score"), "strong AI-built signals"],
     [n("reimpl_score"), "strong reimplementation claims"],
@@ -49,8 +61,17 @@ function renderReport(root, DATA, INFO) {
 
   const q = $("q").value.trim().toLowerCase();
   const key = $("sort").value, min = +$("min").value;
+  // Product list: what the retail clones reimplement, most cloned first
+  const counts = new Map();
+  for (const r of retail) counts.set(label(r.product), (counts.get(label(r.product)) || 0) + 1);
+  const pick = $("product").value;
+  $("product").innerHTML = '<option value="">all products</option>' + [...counts].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+    .map(([p, c]) => `<option value="${esc(p)}"${p === pick ? " selected" : ""}>${esc(p)} (${c})</option>`).join("");
+  const kind = $("kind").value;
+  $("productWrap").hidden = kind !== "retail" || !counts.size;
   const show = $("show").value;
-  let rows = DATA.filter(r => r.combined >= min && (
+  let rows = DATA.filter(r => r.combined >= min &&
+    (kind === "all" || (r.product && (!pick || label(r.product) === pick))) && (
     show === "all" || (show === "live" ? r.link !== "gone" : r.link === "gone" || r.link === "archived" || r.previously?.length)));
   if (q) rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(q));
   rows.sort((a, b) => key === "created" ? b.created.localeCompare(a.created) : b[key] - a[key]);
@@ -65,6 +86,7 @@ function renderReport(root, DATA, INFO) {
         <a class="name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.repo)}</a>
         ${r.link === "gone" ? `<span class="chip gone" title="${esc(r.link_reason || "")}">removed${r.gone_since ? " since " + esc(r.gone_since) : ""}</span>` : ""}
         ${r.link === "archived" ? '<span class="chip moved">archived</span>' : ""}
+        ${r.product ? `<span class="chip product">≈ ${esc(label(r.product))}</span>` : ""}
         ${r.previously?.length ? `<span class="chip moved">renamed from ${r.previously.map(esc).join(", ")}</span>` : ""}
         <div class="desc">${esc(r.description) || "<i>no description</i>"}</div>
         <div class="meta">

@@ -12,6 +12,10 @@ Finds GitHub projects that look like AI-built ("vibe coded") reimplementations o
 
 **Timer:** like heat, a cron-job.org job starts the workflow through GitHub's API every 10 minutes, using a fine-grained token with *Actions: read and write* on this repo. GitHub's own schedule stays on as a backup (it runs late, sometimes not at all, and pauses after 60 days without repo activity). To run a scan by hand: **Actions → Scan and deploy → Run workflow**.
 
+## Retail product clones
+
+`products.js` lists about 80 well-known commercial products (Adobe Photoshop, Microsoft Word, Final Cut Pro, Figma, Notion, Slack…). A repo is tagged with a product when its description or the top of its README says it is a reimplementation, clone, alternative or replacement of it, e.g. *"a clean-room reimplementation of Adobe Photoshop"*. Lists that merely mention products further down don't count. The page opens on these **retail product clones** with a product picker; choose *Kind: all repos* to see everything. Each scheduled run also searches for clones of four product queries in turn, so the whole list is covered about every 10 hours. Add a product by adding a line to `products.js`.
+
 ## How it scores
 
 Each repo gets two scores from 0 to 100:
