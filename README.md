@@ -10,7 +10,7 @@ Finds GitHub projects that look like AI-built ("vibe coded") reimplementations o
 
 **Run your own scan** lets you name a target project, e.g. `redis`, and the original repo, e.g. `redis/redis`. A token is optional: without one GitHub allows 60 requests an hour (about 25 repos) and no code search; a fine-grained token with no extra permissions raises that to 5,000. The token stays in your browser and is sent only to `api.github.com`. Results can be downloaded as a standalone HTML report or as JSON.
 
-GitHub runs scheduled workflows on a best-effort basis, so a scan can arrive a few minutes late, and it pauses them in a repo with no activity for 60 days (re-enable under Actions).
+**Timer:** like heat, a cron-job.org job starts the workflow through GitHub's API every 10 minutes, using a fine-grained token with *Actions: read and write* on this repo. GitHub's own schedule stays on as a backup (it runs late, sometimes not at all, and pauses after 60 days without repo activity). To run a scan by hand: **Actions → Scan and deploy → Run workflow**.
 
 ## How it scores
 

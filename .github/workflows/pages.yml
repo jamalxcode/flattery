@@ -1,11 +1,15 @@
 # Scans GitHub every 10 minutes and publishes the results with the site, so visitors
 # see the latest scan without a token. Reuses the previous published scan as a cache:
-# a repo is re-fetched at most every 6 hours, which keeps this inside the Actions
-# token's 1,000 requests an hour.
+# a repo is re-fetched at most every 6 hours and at most 20 per run, which keeps this
+# inside the Actions token's 1,000 requests an hour even when both timers fire.
+#
+# Timer: cron-job.org starts this through GitHub's API every 10 minutes (POST
+# /repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches), as for heat,
+# because GitHub's own schedule runs late or not at all. The schedule below is a backup.
 name: Scan and deploy
 on:
   push: { branches: [main] }
-  schedule: [{ cron: "*/10 * * * *" }]
+  schedule: [{ cron: "3-59/10 * * * *" }]  # :03, :13, :23…, away from the top-of-hour rush
   workflow_dispatch: {}
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: false }
@@ -26,7 +30,7 @@ jobs:
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           mkdir -p data
-          if ! node tools/scan.mjs --max-repos 120 --max-fresh 30 --cache "$RUNNER_TEMP/prev.json" --out data; then
+          if ! node tools/scan.mjs --max-repos 120 --max-fresh 20 --cache "$RUNNER_TEMP/prev.json" --out data; then
             echo "::warning::scan failed, republishing the previous scan"
             [ -s "$RUNNER_TEMP/prev.json" ] && cp "$RUNNER_TEMP/prev.json" data/latest.json
           fi
