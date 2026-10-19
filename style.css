@@ -67,6 +67,10 @@ button:disabled{opacity:.5;cursor:default}
 .chip.ai{background:var(--ai-bg);color:var(--ai)}
 .chip.re{background:var(--re-bg);color:var(--re)}
 .chip.orig{background:var(--orig-bg);color:var(--orig)}
+.chip.gone,.chip.moved{border:1px solid currentColor;margin-left:6px;vertical-align:2px;font-size:11.5px;padding:1px 8px}
+.chip.gone{color:var(--hi)}
+.chip.moved{color:var(--mid)}
+.card.is-gone{opacity:.62}
 details{margin-top:6px;font-size:12.5px;color:var(--muted)}
 .note{margin-top:28px;font-size:13px;color:var(--muted);border-top:1px solid var(--border);padding-top:14px}
 .empty{color:var(--muted);text-align:center;padding:40px}

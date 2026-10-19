@@ -65,14 +65,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const basename = p => p.slice(p.lastIndexOf("/") + 1);
 
 export class GitHub {
-  constructor(token, log, signal) {
+  // maxWait: longest rate-limit wait (seconds) worth sitting out; longer ones skip the request.
+  constructor(token, log, signal, { maxWait = 300 } = {}) {
     this.token = token;
     this.log = log;
     this.signal = signal;
+    this.maxWait = maxWait;
     this.calls = 0;
   }
 
-  async get(path, params, { accept = "application/vnd.github+json", raw = false } = {}) {
+  graphql(query) {
+    return this.get("/graphql", null, { method: "POST", body: JSON.stringify({ query }) });
+  }
+
+  async get(path, params, { accept = "application/vnd.github+json", raw = false, method = "GET", body } = {}) {
     let url = path.startsWith("http") ? path : API + path;
     if (params) url += "?" + new URLSearchParams(params);
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -81,6 +87,8 @@ export class GitHub {
       try {
         this.calls++;
         res = await fetch(url, {
+          method,
+          body,
           headers: { Accept: accept, "X-GitHub-Api-Version": "2022-11-28", ...(this.token && { Authorization: `Bearer ${this.token}` }) },
           signal: this.signal,
         });
@@ -95,6 +103,10 @@ export class GitHub {
         const wait = await this.rateLimitWait(res);
         if (wait != null && wait > 120 && !this.token)
           throw new RateLimitError(`hit GitHub's limit of 60 requests an hour without a token (resets in ${Math.ceil(wait / 60)} min)`);
+        if (wait != null && wait > this.maxWait) {
+          this.log(`rate limited for ${wait}s, skipping ${url.replace(API, "").split("?")[0]}`, "warn");
+          return null;
+        }
         if (wait != null) {
           this.log(`rate limited, waiting ${wait}s…`, "warn");
           await sleep(wait * 1000);
@@ -117,7 +129,7 @@ export class GitHub {
       wait = Math.max(1, +h.get("x-ratelimit-reset") - Math.floor(Date.now() / 1000) + 1);
     else if (/rate limit/i.test(await res.text())) wait = 30;
     else return null;
-    return this.token ? Math.min(wait, 300) : wait;
+    return wait;
   }
 }
 
@@ -140,12 +152,15 @@ export async function discover(gh, opts) {
     for (const it of res?.items || []) add(it.full_name, `repo: ${q}`, "default_branch" in it && "stargazers_count" in it ? it : null);
   }
   if (opts.codeSearch) {
-    for (const q of CODE_QUERIES) {
+    // Code search allows ~10 requests a minute, so a frequent scheduled scan runs one
+    // query per run, rotating through them (opts.rotate).
+    const codeQueries = opts.rotate != null ? [CODE_QUERIES[opts.rotate % CODE_QUERIES.length]] : CODE_QUERIES;
+    for (const q of codeQueries) {
       const full = q + (t ? ` "${t}"` : "");
       gh.log(`code search: ${full}`);
       const res = await gh.get("/search/code", { q: full, per_page: opts.perQuery });
       for (const it of res?.items || []) add(it.repository.full_name, `code: ${q}`);
-      await sleep(6000); // code search allows ~10 requests/minute
+      if (codeQueries.length > 1) await sleep(6000);
     }
   }
   if (opts.commitSearch) {
@@ -303,16 +318,43 @@ export async function analyze(gh, fullName, foundBy, original, knownMeta) {
   return r;
 }
 
+// Checks many repos at once with GraphQL (one request per 50 repos). GraphQL follows
+// renames and transfers; a deleted, private or blocked repo comes back as an error.
+// Returns Map name -> { status: "ok" | "archived" | "renamed" | "gone", name, url, pushed_at, reason }.
+export async function checkLinks(gh, names) {
+  const out = new Map();
+  for (let i = 0; i < names.length; i += 50) {
+    const batch = names.slice(i, i + 50);
+    const fields = batch.map((n, j) => {
+      const [owner, name] = n.split("/");
+      return `r${j}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { nameWithOwner url isArchived pushedAt }`;
+    });
+    const res = await gh.graphql(`query { ${fields.join("\n")} }`);
+    if (!res?.data) continue; // request failed: leave these unchecked this run
+    const errs = new Map((res.errors || []).map(e => [e.path?.[0], e.type || e.message]));
+    batch.forEach((n, j) => {
+      const r = res.data[`r${j}`];
+      if (!r) return out.set(n, { status: "gone", reason: errs.get(`r${j}`) || "NOT_FOUND" });
+      const renamed = r.nameWithOwner.toLowerCase() !== n.toLowerCase();
+      out.set(n, {
+        status: renamed ? "renamed" : r.isArchived ? "archived" : "ok",
+        name: r.nameWithOwner, url: r.url, archived: r.isArchived, pushed_at: r.pushedAt,
+      });
+    });
+  }
+  return out;
+}
+
 // Discover candidates, then analyse them with a small worker pool.
 // opts.cache (Map repo -> earlier result) and opts.maxFresh let the scheduled scan
 // reuse recent analyses instead of re-fetching every repo on every run.
 export async function scan(opts, { log, onResult, signal }) {
-  const gh = new GitHub(opts.token, log, signal);
-  if (opts.token) {
+  const gh = opts.gh || new GitHub(opts.token, log, signal);
+  if (opts.token && !opts.gh) {
     // A bad token throws (401) here; an Actions token can't read /user but is fine.
     const me = await gh.get("/user");
     log(me ? `signed in as ${me.login}` : "using an app token");
-  } else {
+  } else if (!opts.token) {
     opts.codeSearch = false;
     const rl = await gh.get("/rate_limit"); // free: doesn't count against the limit
     const left = rl?.resources?.core?.remaining ?? 60;
@@ -334,7 +376,7 @@ export async function scan(opts, { log, onResult, signal }) {
 
   let next = 0, done = 0, fresh = 0, reused = 0, limitHit = null;
   const worker = async () => {
-    while (next < names.length && !limitHit) {
+    while (next < names.length && !limitHit && !(opts.deadline && Date.now() > opts.deadline)) {
       const name = names[next++];
       const cached = opts.cache?.get(name);
       if (cached) {
@@ -361,5 +403,5 @@ export async function scan(opts, { log, onResult, signal }) {
   await Promise.all(Array.from({ length: 4 }, worker));
   if (limitHit) log(`stopped early: ${limitHit.message}. Add a token to scan more.`, "warn");
   log(`done, ${gh.calls} API calls${opts.cache ? `, ${fresh} fetched, ${reused} from cache` : ""}`, "ok");
-  return { target: opts.target, original: original?.repo || "" };
+  return { target: opts.target, original: original?.repo || "", originalData: original, fresh };
 }
