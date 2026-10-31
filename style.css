@@ -218,10 +218,12 @@ a.xobject { background: var(--surface-2); color: var(--text); border: 1px solid 
 .note-small { font-size: 0.8rem; color: var(--text-muted); }
 
 /* About and footer */
-.about { max-width: 760px; margin: 64px 0 40px; color: var(--text-muted); }
-.about h2 { color: var(--text); font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 10px; }
+.about { color: var(--text-muted); }
+.about h2 { color: var(--text); font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 12px; }
 .about p { margin-bottom: 10px; }
-footer { padding: 28px 0 40px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+.about-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; }
+.about-list b { color: var(--text); }
+footer { margin-top: 40px; padding: 28px 0 40px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.88rem; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
 footer a { text-decoration: none; font-weight: 600; }
 
 @media (max-width: 900px) {
@@ -300,3 +302,5 @@ footer a { text-decoration: none; font-weight: 600; }
 .alt-index li { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; }
 .alt-index a { font-weight: 700; text-decoration: none; }
 @media (max-width: 760px) { .charts { grid-template-columns: 1fr; } .hbar, .srow { grid-template-columns: minmax(0, 6.5rem) 1fr auto; } }
+.wrap > section.about { margin: 48px 0; }
+@media (max-width: 400px) { .brand { font-size: 0; gap: 0; } }

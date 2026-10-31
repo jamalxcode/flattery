@@ -6,8 +6,8 @@ let live = null;
 
 // Theme: Auto (system) → Light → Dark, remembered per browser, as on go.sala.company
 const themeBtn = $("theme-btn");
-const themeLabels = { auto: "◐ Auto", light: "☀ Light", dark: "☾ Dark" };
-const showTheme = t => { themeBtn.textContent = themeLabels[t]; themeBtn.setAttribute("aria-label", "Colour theme: " + (t === "auto" ? "automatic" : t)); };
+const themeLabels = { auto: "◐ <span class=\"label\">Auto</span>", light: "☀ <span class=\"label\">Light</span>", dark: "☾ <span class=\"label\">Dark</span>" };
+const showTheme = t => { themeBtn.innerHTML = themeLabels[t]; themeBtn.setAttribute("aria-label", "Colour theme: " + (t === "auto" ? "automatic" : t)); };
 showTheme(document.documentElement.dataset.theme || "auto");
 themeBtn.addEventListener("click", () => {
   const order = ["auto", "light", "dark"];
@@ -19,6 +19,11 @@ themeBtn.addEventListener("click", () => {
 });
 
 // Surprise me: a random loved clone, or any rated one when none are loved yet
+// How the ratings work: a drawer, like the newsletter
+const about = $("about");
+$("about-btn").addEventListener("click", () => { about.showModal(); about.scrollTop = 0; });
+about.addEventListener("click", ev => { if (ev.target === about || ev.target.closest(".close")) about.close(); });
+
 $("news-btn").addEventListener("click", () => $("live").flattery?.news());
 
 $("surprise").addEventListener("click", () => {
@@ -33,6 +38,7 @@ $("surprise").addEventListener("click", () => {
 let hashOpened = false;
 function openFromHash() {
   if (location.hash.startsWith("#news")) return $("live").flattery?.news();
+  if (location.hash === "#how") return $("about").showModal();
   const m = location.hash.match(/^#p=(.+)$/);
   // A project page (/p/<code>/) names its project in window.FLATTERY_OPEN
   if (!m && window.FLATTERY_PRODUCT && !hashOpened) { hashOpened = true; return $("live").flattery?.pick(window.FLATTERY_PRODUCT); }
