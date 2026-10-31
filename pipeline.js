@@ -15,8 +15,8 @@
 import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
 import { buildGroups } from "./groups.js";
-import { SENTIMENT_VERSION, SERIOUS_FLAGS, REVIEW_VERSION } from "./haiku.js";
-import { TAG, postCode, parseCode, tally, WORKS_TAG, BROKEN_TAG, parseTrial, tallyTrials } from "./complaints.js";
+import { SENTIMENT_VERSION, SERIOUS_FLAGS, REVIEW_VERSION, NAME_VERSION } from "./haiku.js";
+import { TAG, postCode, parseCode, tally, WORKS_TAG, BROKEN_TAG, parseTrial, tallyTrials, ADD_TAG, parseAdd } from "./complaints.js";
 import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
 const CLONE_WORDS = '(clone OR reimplementation OR "reverse engineered" OR "reverse engineer" OR "open source alternative" OR rebuilt OR recreated OR recreation OR "from scratch" OR tribute)';
@@ -222,6 +222,37 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
       if (added) log(`tried it: ${added} new reports`);
     }
 
+    // Suggestions: "#FlatteryAdd <link>" posts from the page's Suggest button. A linked X post is
+    // looked up and judged like any other; a linked repo is searched for its announcement on X.
+    const suggestedRepos = [];
+    {
+      const q = `#${ADD_TAG} -is:retweet`;
+      const { posts, newest } = await x.search(q, { sinceId: sinceIds[q], max: 50 });
+      if (newest) sinceIds[q] = newest;
+      const ids = new Set();
+      for (const p of posts) {
+        const add = parseAdd(p);
+        for (const id of add.ids) if (!catalog.has(id) && !rejected.has(id) && !fresh.has(id)) ids.add(id);
+        for (const r of add.repos) if (![...catalog.values()].some(e => e.repo?.toLowerCase() === r.toLowerCase())) suggestedRepos.push(r);
+      }
+      const want = [...ids].slice(0, opts.maxSuggestions ?? 20);
+      if (want.length) {
+        const { posts: linked } = await x.lookup(want);
+        for (const p of linked) if (!p.is_reply_or_repost) fresh.set(p.id, { ...p, found_by: ["suggested with #" + ADD_TAG] });
+      }
+      if (posts.length) log(`suggestions: ${posts.length} posts, ${want.length} linked posts and ${suggestedRepos.length} repos to check`);
+    }
+    for (const repo of [...new Set(suggestedRepos)].slice(0, opts.maxSuggestions ?? 5)) {
+      if (outOfTime()) break;
+      const { posts } = await x.search(`url:"github.com/${repo}" -is:retweet -is:reply`, { max: 20 });
+      counts.searched++;
+      for (const p of posts) {
+        if (p.is_reply_or_repost || catalog.has(p.id) || rejected.has(p.id)) continue;
+        if (!fresh.has(p.id)) fresh.set(p.id, { ...p, found_by: [] });
+        fresh.get(p.id).found_by.push(`suggested repo: ${repo}`);
+      }
+    }
+
     // Repo searches: posts linking a known, starred repo, to find its original announcement
     // and the real discussion, not only the curator post that brought it in. Weekly per repo.
     const repoSearched = { ...(fromX && prev.info.repo_searched) };
@@ -318,18 +349,30 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
       }
       log(`matching: ${unnamed.filter(e => e.matched).length} of ${unnamed.length} unnamed posts matched to a project`);
     }
-    // Short names for the rest that still have none (a repo's own name counts as a name)
-    const nameless = [...catalog.values()].filter(e => e.status === "ok" && !e.project && !e.repo && !e.display_name && !e.named_checked).slice(0, 60);
+    // The project's own name for the rest that still have none (a repo's own name counts as a
+    // name). Projects with no name of their own show as "<original> clone"; names given under
+    // older rules (descriptions such as "Open Discord alternative") are redone once.
+    const nameless = [...catalog.values()].filter(e => e.status === "ok" && !e.project && !e.repo &&
+      (e.named_v || 1) < NAME_VERSION).slice(0, 80);
     if (nameless.length) {
       const n = await haiku.name(nameless);
-      for (const e of nameless) { e.named_checked = today; if (n.get(e.id)) e.display_name = n.get(e.id); }
-      log(`naming: ${n.size} of ${nameless.length} unnamed projects named`);
+      for (const e of nameless) {
+        e.named_checked = today;
+        e.named_v = NAME_VERSION;
+        if (n.get(e.id)) e.display_name = n.get(e.id); else delete e.display_name;
+      }
+      log(`naming: ${n.size} of ${nameless.length} unnamed projects have a name of their own`);
     }
     // Categories and clean product names for entries from before they existed
-    const unclassified = [...catalog.values()].filter(e => !e.category).slice(0, 100);
+    // and once more for those that don't say what they clone
+    const unclassified = [...catalog.values()].filter(e => !e.category || (e.status === "ok" && !e.original_clean && !e.original_checked)).slice(0, 100);
     if (unclassified.length) {
       const c = await haiku.classify(unclassified);
-      for (const e of unclassified) if (c.get(e.id)) Object.assign(e, { category: c.get(e.id).category, original_clean: c.get(e.id).original_clean });
+      for (const e of unclassified) {
+        e.original_checked = today;
+        const r = c.get(e.id);
+        if (r) Object.assign(e, { category: r.category, original_clean: r.original_clean || e.original_clean, product: e.product || matchProduct(r.original_clean) });
+      }
       log(`categories: ${c.size} of ${unclassified.length} classified`);
     }
 
@@ -408,24 +451,27 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
       if (!st) continue;
       if (st.status === "gone") { e.github = { ...e.github, status: "gone", reason: st.reason, checked: nowIso }; continue; }
       const history = (e.github?.stars_history || []).filter(h => h.at.slice(0, 10) !== today);
-      const { image, image_checked } = e.github || {};
-      e.github = { ...st, checked: nowIso, stars_history: [...history, { at: nowIso, stars: st.stars }].slice(-30), image, image_checked };
+      const { image, logo, image_checked } = e.github || {};
+      e.github = { ...st, checked: nowIso, stars_history: [...history, { at: nowIso, stars: st.stars }].slice(-30), image, logo, image_checked };
       if (st.repo !== e.repo) { e.previous_repo = e.repo; e.repo = st.repo; }
     }
     counts.repos = stats.size;
     log(`github: ${stats.size} of ${names.length} repos checked`);
   }
 
-  // Card pictures: the first real image in each repo's README, looked up weekly
+  // Card pictures and icons: the first real image and the logo in each repo's README, looked up
+  // weekly (and once more for entries checked before logos were looked for)
   if (githubImage) {
     const want = linked.filter(e => e.github && e.github.status !== "gone" &&
-      (!e.github.image_checked || now - Date.parse(e.github.image_checked) > WEEK)).slice(0, opts.maxImages ?? 40);
+      (!e.github.image_checked || now - Date.parse(e.github.image_checked) > WEEK || e.github.logo === undefined)).slice(0, opts.maxImages ?? 60);
     let found = 0;
     for (let i = 0; i < want.length; i += 8) {
       await Promise.all(want.slice(i, i + 8).map(async e => {
-        const img = await githubImage(e.repo);
-        if (img === undefined) return; // README unreachable: try again next run
+        const got = await githubImage(e.repo);
+        if (got === undefined) return; // README unreachable: try again next run
+        const { image: img, logo = null } = got && typeof got === "object" ? got : { image: got };
         e.github.image = img;
+        e.github.logo = logo;
         e.github.image_checked = nowIso;
         if (img) found++;
       }));
@@ -542,6 +588,19 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
       if (g.history.at(-1)?.at === today) g.history[g.history.length - 1] = { at: today, verdict: "mixed", score: g.reception.score };
     }
   }
+
+  // Kept off the page (the posts stay in the catalog and come back if they grow):
+  // untested projects that are still tiny after two weeks, unnoticed new ones, and ones that say neither their
+  // own name nor what they clone
+  const quiet = g => ["too-early", "faded"].includes(g.reception.verdict) && now - Date.parse(g.created_at) > 14 * 864e5 &&
+    g.metrics.likes < 20 && !(g.reception.repo_counted && g.github?.stars >= 20) && !g.trials;
+  // and ones nobody has reacted to at all yet that link no repo (they appear once they get likes)
+  const unnoticed = g => g.reception.verdict === "too-early" && g.metrics.likes < 3 && !g.repo;
+  const anonymous = g => !g.project && !g.display_name && !g.repo && !g.product && !g.original_clean && !g.original;
+  const shown = groups.filter(g => g.status !== "ok" || !(quiet(g) || unnoticed(g) || anonymous(g)));
+  counts.hidden = groups.length - shown.length;
+  if (counts.hidden) log(`hidden: ${counts.hidden} projects still tiny, unnoticed, or with no name and no original`);
+  groups = shown;
 
   counts.changed = groups.filter(g => g.history.length > 1 && g.history.at(-1).at === today).length;
   if (counts.changed) log(`ratings: ${counts.changed} projects changed`);

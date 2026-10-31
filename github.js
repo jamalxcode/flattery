@@ -24,10 +24,10 @@ async function graphql(token, query, log) {
   return null;
 }
 
-const fields = since => `nameWithOwner url homepageUrl description isArchived isFork pushedAt createdAt stargazerCount forkCount
+const fields = since => `nameWithOwner url homepageUrl owner { __typename avatarUrl(size: 160) } description isArchived isFork pushedAt createdAt stargazerCount forkCount
   watchers { totalCount } licenseInfo { spdxId } primaryLanguage { name }
   defaultBranchRef { target { ... on Commit { history(since: "${since}") { totalCount } } } }
-  releases(first: 10, orderBy: { field: CREATED_AT, direction: DESC }) { totalCount nodes { releaseAssets(first: 30) { nodes { name downloadCount } } } }`;
+  releases(first: 10, orderBy: { field: CREATED_AT, direction: DESC }) { totalCount nodes { releaseAssets(first: 30) { nodes { name downloadCount browserDownloadUrl } } } }`;
 
 // Which systems a release can be installed on, from its file names
 export function platformsOf(names) {
@@ -39,6 +39,30 @@ export function platformsOf(names) {
     has(/\.apk$|android/i) && "Android",
     has(/\.ipa$/i) && "iOS",
   ].filter(Boolean);
+}
+
+// The file to download for each system, from the newest release that has one: { Mac: url, … }.
+// Prefers installers (dmg, exe/msi, AppImage/deb) over archives, and skips checksums and sources.
+export function downloadsOf(releases) {
+  const out = {};
+  const RANK = {
+    Mac: [/\.dmg$/i, /\.pkg$/i, /(mac|darwin|osx).*\.zip$/i],
+    Windows: [/\.exe$/i, /\.msi$/i, /\.msix$/i, /win(dows)?.*\.zip$/i],
+    Linux: [/\.appimage$/i, /\.deb$/i, /\.rpm$/i, /linux.*\.(tar\.gz|zip)$/i],
+    Android: [/\.apk$/i],
+  };
+  for (const rel of releases || []) {
+    const assets = (rel?.releaseAssets?.nodes || []).filter(a => a?.browserDownloadUrl && !/\.(sha\d*|sig|asc|blockmap|ya?ml|txt|json)$|source|symbols|debug/i.test(a.name || ""));
+    for (const [os, tests] of Object.entries(RANK)) {
+      if (out[os]) continue;
+      for (const re of tests) {
+        // Mac builds for Apple chips over Intel ones when both exist
+        const hits = assets.filter(a => re.test(a.name)).sort((x, y) => /arm64|aarch64|universal/i.test(y.name) - /arm64|aarch64|universal/i.test(x.name));
+        if (hits.length) { out[os] = hits[0].browserDownloadUrl; break; }
+      }
+    }
+  }
+  return out;
 }
 
 // Returns Map name -> stats, or { status: "gone" } for deleted, private or blocked repos.
@@ -69,6 +93,8 @@ export async function repoStats(token, names, log) {
         watchers: r.watchers?.totalCount || 0,
         releases: r.releases?.totalCount || 0,
         downloads: (r.releases?.nodes || []).reduce((s, rel) => s + (rel?.releaseAssets?.nodes || []).reduce((t, a) => t + (a?.downloadCount || 0), 0), 0),
+        get: downloadsOf(r.releases?.nodes),
+        org_avatar: r.owner?.__typename === "Organization" ? r.owner.avatarUrl || "" : "",
         platforms: platformsOf((r.releases?.nodes || []).flatMap(rel => (rel?.releaseAssets?.nodes || []).map(a => a?.name || ""))),
         homepage: /^https?:\/\//.test(r.homepageUrl || "") && !/github\.com/.test(r.homepageUrl) ? r.homepageUrl : "",
         commits_30d: r.defaultBranchRef?.target?.history?.totalCount ?? null,
@@ -106,13 +132,35 @@ export function pickReadmeImage(md, repo) {
   return null;
 }
 
-// raw.githubusercontent.com isn't API rate limited. Returns the image URL, null when the
-// README has none, or undefined when the README couldn't be fetched (try again later).
+// An icon for the row: a logo near the top of the README (an image named or labelled logo or
+// icon, or a small image before the first heading's text). Badges are skipped.
+const BADGE = /shields\.io|badge|badgen|dcbadge|trendshift|codecov|travis-ci|circleci|\/workflows\/|buymeacoffee|ko-fi|star-history|contrib\.rocks|vercel\.com\/button|producthunt|deploy/i;
+const absolute = (src, repo) => /^https?:\/\//i.test(src)
+  ? src.replace(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/(.+)$/i, "https://raw.githubusercontent.com/$1/$2")
+  : /^(data:|#|mailto:)/i.test(src) ? null : `https://raw.githubusercontent.com/${repo}/HEAD/${src.replace(/^\.?\//, "")}`;
+export function pickReadmeLogo(md, repo) {
+  const text = (md || "").replace(/&#x2F;/gi, "/").replace(/&amp;/g, "&").slice(0, 3000);
+  for (const m of text.matchAll(/!\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)|<img\b[^>]*>/gi)) {
+    const tag = m[0];
+    const src = m[2] || tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1];
+    const alt = m[1] ?? tag.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1] ?? "";
+    const width = +(tag.match(/\bwidth\s*=\s*["']?(\d+)/i)?.[1] || 0);
+    const height = +(tag.match(/\bheight\s*=\s*["']?(\d+)/i)?.[1] || 0);
+    if (!src || BADGE.test(src)) continue;
+    const named = /logo|icon|favicon|app[-_]?icon/i.test(src) || /\b(logo|icon)\b/i.test(alt);
+    const small = (width && width <= 260) && (!height || height <= 260);
+    if (named || small) return absolute(src, repo);
+  }
+  return null;
+}
+
+// raw.githubusercontent.com isn't API rate limited. Returns { image, logo } (each null when the
+// README has none), or undefined when the README couldn't be fetched (try again later).
 export async function readmeImage(repo) {
   for (const name of ["README.md", "readme.md", "Readme.md", "README.MD"]) {
     try {
       const res = await fetch(`https://raw.githubusercontent.com/${repo}/HEAD/${name}`);
-      if (res.ok) return pickReadmeImage(await res.text(), repo);
+      if (res.ok) { const md = await res.text(); return { image: pickReadmeImage(md, repo), logo: pickReadmeLogo(md, repo) }; }
       if (res.status !== 404) return undefined;
     } catch { return undefined; }
   }

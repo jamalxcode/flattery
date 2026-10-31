@@ -62,6 +62,12 @@ export function tally(objections) {
 // "I tried it": posts tagged #FlatteryWorks or #FlatteryBroken with a card's code. One vote per
 // established account per project (its latest), same age and follower rules as objections.
 export const WORKS_TAG = "FlatteryWorks", BROKEN_TAG = "FlatteryBroken";
+// Suggestions: "#FlatteryAdd <link to the X post or the GitHub repo>"
+export const ADD_TAG = "FlatteryAdd";
+export function parseAdd(post) {
+  const ids = (post.urls || []).map(u => u.match(/(?:x|twitter)\.com\/\w+\/status(?:es)?\/(\d+)/i)?.[1]).filter(Boolean);
+  return { ids: [...new Set(ids)].filter(id => id !== post.id), repos: post.repos || [] };
+}
 
 export function parseTrial(text) {
   const m = String(text).match(new RegExp(`#(${WORKS_TAG}|${BROKEN_TAG})\\W+(fr[0-9a-z]{5})\\b`, "i"));
