@@ -7,7 +7,8 @@
 // GitHub takes priority: a repo many people star or download is well received however
 // small its X post was, and lots of likes on X with a repo nobody stars is buzz, not success.
 // Only red flags several people raise (scam, stolen code…) override GitHub. Stars count only
-// when the repo is the poster's own (ownsRepo), so linking a famous project borrows nothing.
+// when the repo is the poster's own or the project itself (ownsRepo), so a post that links a
+// famous unrelated project (Linux behind "Ginux") borrows nothing.
 import { SERIOUS_FLAGS } from "./haiku.js";
 
 const log01 = (v, full) => Math.min(1, Math.log10(1 + Math.max(0, v)) / Math.log10(1 + full));
@@ -46,8 +47,23 @@ export const NEW_REPO_DAYS = 120;
 // never becomes the subject of a card (no "Linux: don't touch").
 export const FAMOUS = 10000;
 const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const baseName = s => String(s || "").replace(/\b(v(er(sion)?)?\s*)?\d+(\.\d+)*\b/gi, " ").replace(/\b(beta|alpha|preview|release|rc)\b/gi, " ");
+
+// Whether a post's linked repo is the project the post is about: the repo's name and the
+// project's name match ("Voicebox" and jamiepine/voicebox, "open-notebook" and lfnovo/open-notebook).
+// A project named after the app it clones ("Excel" linking an Excel repo) doesn't count.
+export function repoIsProject(e, gh = e.github) {
+  const repo = norm(baseName(String(gh?.repo || e.repo || "").split("/")[1]));
+  const original = [e.original_clean, e.original, e.product?.name].map(n => norm(n)).filter(Boolean);
+  const names = [e.project, e.display_name].map(n => norm(baseName(n))).filter(n => n.length >= 3 && !original.includes(n));
+  return repo.length >= 3 && !original.includes(repo) &&
+    names.some(n => n === repo || (Math.min(n.length, repo.length) >= 5 && (n.includes(repo) || repo.includes(n))));
+}
+
 export function ownsRepo(entry, gh = entry.github) {
   if (entry.repo_owned != null) return entry.repo_owned; // set by a merge or by overrides.json
+  // The repo is the project itself, whoever shared it: its stars are the project's success
+  if (repoIsProject(entry, gh)) return true;
   // The author says they built it (Haiku, from the post); trusted below famous-project size
   if (entry.author_built_it && (gh?.stars ?? 0) < FAMOUS) return true;
   const rawOwner = (gh?.repo || entry.repo || "").split("/")[0];
