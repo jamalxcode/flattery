@@ -10,9 +10,9 @@
 //                re-read when replies have grown, while X's 7-day search still covers them
 //   5. confirm   stars, downloads and star growth of each linked GitHub repo
 //   6. score     reception score and verdict (reception.js)
-import { BudgetError } from "./x.js";
+import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
-import { detectProduct, matchProduct, PRODUCT_QUERIES } from "./products.js";
+import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
 const CLONE_WORDS = '(clone OR reimplementation OR "reverse engineered" OR "open source alternative" OR rebuilt OR recreated OR "from scratch")';
 export const GENERIC_QUERIES = [
@@ -23,6 +23,7 @@ export const GENERIC_QUERIES = [
 ];
 const CHECKPOINTS = [["1h", 1], ["24h", 24], ["7d", 168]];
 const REPLY_WINDOW_H = 6.5 * 24; // recent search only reaches 7 days back
+const ARCHIVE_WINDOW_H = 30 * 24; // with full-archive search, older threads can be read too
 
 const iso = t => new Date(t).toISOString().replace(/\.\d+Z$/, "Z");
 
@@ -81,6 +82,37 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
       }
       log(`search: ${posts.length} posts for ${q.slice(0, 80)}${q.length > 80 ? "…" : ""}`);
     }
+
+    // Backfill: full-archive search over the last N days, most popular first. Only posts
+    // with some reach are kept, so a backfill fills the catalog with what people noticed.
+    let archive = false;
+    if (opts.backfillDays) {
+      const startTime = iso(now - opts.backfillDays * 864e5);
+      archive = true;
+      let kept = 0;
+      for (const q of [...GENERIC_QUERIES, ...PRODUCT_GROUP_QUERIES]) {
+        if (outOfTime()) break;
+        let posts;
+        try {
+          ({ posts } = await x.search(q, { archive: true, startTime, max: opts.backfillPerQuery ?? 100 }));
+        } catch (err) {
+          if (!(err instanceof ArchiveError)) throw err;
+          log(`backfill stopped: ${err.message}`, "warn");
+          archive = false;
+          break;
+        }
+        counts.searched++;
+        for (const p of posts) {
+          if (p.is_reply_or_repost || !reached(p.metrics) || rejected.has(p.id)) continue;
+          const known = catalog.get(p.id);
+          if (known) { known.found_by = [...new Set([...known.found_by, "backfill"])]; continue; }
+          if (!fresh.has(p.id)) { fresh.set(p.id, { ...p, found_by: [] }); kept++; }
+          fresh.get(p.id).found_by.push("backfill: " + q);
+        }
+        log(`backfill: ${posts.length} posts for ${q.slice(0, 80)}${q.length > 80 ? "…" : ""}`);
+      }
+      log(`backfill: ${kept} popular candidates from the last ${opts.backfillDays} days`);
+    }
     counts.candidates = fresh.size;
 
     // 3. Triage
@@ -110,14 +142,14 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
       log(`triage: ${fresh.size} candidates, ${counts.added} clones, ${counts.rejected} not clones`);
     }
 
-    // 4. Reactions
-    const needReactions = [...catalog.values()].filter(e => e.status === "ok" && reached(e.metrics) && ageH(e) < REPLY_WINDOW_H &&
+    // 4. Reactions (a backfill reads many more, since it brings in many popular posts at once)
+    const needReactions = [...catalog.values()].filter(e => e.status === "ok" && reached(e.metrics) && ageH(e) < (archive ? ARCHIVE_WINDOW_H : REPLY_WINDOW_H) &&
       (!e.sentiment || (now - Date.parse(e.sentiment.at) > 24 * 36e5 && e.metrics.replies + e.metrics.quotes >= 1.3 * (e.sentiment.reactions_at_sample || 0) + 5)))
       .sort((a, b) => b.metrics.likes - a.metrics.likes)
       .slice(0, opts.maxReactions ?? 10);
     for (const e of needReactions) {
       if (outOfTime()) break;
-      const replies = (await x.replies(e, opts.repliesPerPost ?? 50)).posts;
+      const replies = (await x.replies(e, opts.repliesPerPost ?? 50, { archive: ageH(e) >= REPLY_WINDOW_H })).posts;
       const quotes = e.metrics.quotes ? (await x.quotes(e, opts.quotesPerPost ?? 20)).posts : [];
       // The author's own replies aren't reception, but often carry the repo link
       const own = replies.filter(r => r.author.id === e.author.id);

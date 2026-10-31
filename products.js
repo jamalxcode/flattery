@@ -118,10 +118,22 @@ export function detectProduct(description, readme) {
 // X search query for one product, for rotating discovery. Names that need their vendor
 // to match ("Microsoft Word") are searched with it.
 const CLONE_WORDS = '(clone OR "open source alternative" OR rebuilt OR recreated OR reimplementation OR "reverse engineered" OR "built my own")';
-export const PRODUCT_QUERIES = PRODUCTS.map(([name, vendor, alias, search]) => {
-  const term = search || (new RegExp(`^(?:${alias})$`, "i").test(name) ? name : `${vendor} ${name}`);
-  return { product: name, q: `"${term}" ${CLONE_WORDS} has:links -is:retweet -is:reply` };
-});
+const TERMS = PRODUCTS.map(([name, vendor, alias, search]) => search || (new RegExp(`^(?:${alias})$`, "i").test(name) ? name : `${vendor} ${name}`));
+export const PRODUCT_QUERIES = PRODUCTS.map(([name], i) => ({ product: name, q: `"${TERMS[i]}" ${CLONE_WORDS} has:links -is:retweet -is:reply` }));
+
+// For backfills: many products per query, kept under X's 512-character query limit.
+export const PRODUCT_GROUP_QUERIES = (() => {
+  const tail = ` ${CLONE_WORDS} has:links -is:retweet -is:reply`;
+  const out = [];
+  let group = [];
+  const q = g => `(${g.map(t => `"${t}"`).join(" OR ")})${tail}`;
+  for (const t of TERMS) {
+    if (group.length && q([...group, t]).length > 500) { out.push(q(group)); group = []; }
+    group.push(t);
+  }
+  if (group.length) out.push(q(group));
+  return out;
+})();
 
 // Maps a product name as Haiku wrote it ("Adobe Photoshop", "photoshop") to the catalog entry.
 export function matchProduct(original) {

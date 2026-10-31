@@ -11,6 +11,8 @@ const USER_FIELDS = "username,name,public_metrics,verified";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export class BudgetError extends Error {}
+// Full-archive search (/2/tweets/search/all) isn't on every plan
+export class ArchiveError extends Error {}
 
 export class X {
   constructor(token, log, { maxReads = 500, maxWait = 60 } = {}) {
@@ -40,6 +42,8 @@ export class X {
         this.reads += body.data?.length || 0;
         return body;
       }
+      if (res.status === 403 && path === "/tweets/search/all")
+        throw new ArchiveError(`full-archive search not available (${res.status}): ${(await res.text()).slice(0, 200)}`);
       if (res.status === 401 || res.status === 403)
         throw new Error(`X rejected the request (${res.status}): ${(await res.text()).slice(0, 200)}`);
       if (res.status === 429) {
@@ -66,6 +70,7 @@ export class X {
     let next, newest;
     while (posts.length < max) {
       if (this.left < 10) throw new BudgetError(`X read budget of ${this.maxReads} posts spent`);
+      if (path === "/tweets/search/all" && this.calls) await sleep(1100); // full-archive search allows one request a second
       const n = Math.max(10, Math.min(100, max - posts.length, this.left));
       const body = await this.get(path, {
         ...params, max_results: n, "tweet.fields": POST_FIELDS, expansions: "author_id", "user.fields": USER_FIELDS,
@@ -81,14 +86,17 @@ export class X {
     return { posts: posts.map(p => normalise(p, users)), newest };
   }
 
-  search(query, { max = 100, sinceId, sort = "relevancy" } = {}) {
+  // archive: full-archive search from startTime (an ISO date) instead of the last 7 days.
+  search(query, { max = 100, sinceId, sort = "relevancy", archive = false, startTime } = {}) {
     // since_id and sort_order=relevancy can't be combined; with since_id only new posts come back anyway
-    return this.list("/tweets/search/recent", { query, ...(sinceId ? { since_id: sinceId } : { sort_order: sort }) }, max);
+    return this.list(archive ? "/tweets/search/all" : "/tweets/search/recent",
+      { query, ...(sinceId ? { since_id: sinceId } : { sort_order: sort }), ...(startTime && { start_time: startTime }) }, max);
   }
 
   // Replies in the thread, the author's own included (they often post the repo link there).
-  replies(post, max = 50) {
-    return this.list("/tweets/search/recent", { query: `conversation_id:${post.id} is:reply`, sort_order: "relevancy" }, max);
+  // Threads older than recent search's 7 days need full-archive search.
+  replies(post, max = 50, { archive = false } = {}) {
+    return this.search(`conversation_id:${post.id} is:reply`, { max, archive, ...(archive && { startTime: post.created_at }) });
   }
 
   quotes(post, max = 20) {
