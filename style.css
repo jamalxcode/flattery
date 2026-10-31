@@ -162,6 +162,10 @@ a.xobject { background: var(--surface-2); color: var(--text); border: 1px solid 
 .save { display: inline-block; font-size: 0.72rem; font-weight: 700; color: var(--pos); margin-left: 4px; }
 .obj { color: var(--neg); font-weight: 700; }
 .statuslist { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; }
+.results { margin: -6px 0 14px; color: var(--text-muted); font-size: 0.95rem; }
+.results b { color: var(--text); }
+.results button { margin-left: 8px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface); font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+#apps { scroll-margin-top: 140px; }
 .empty { text-align: center; color: var(--text-muted); padding: 48px 16px; font-size: 1.05rem; }
 
 /* Detail sheet */

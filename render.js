@@ -97,6 +97,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
             </select>
           </div>
         </div>
+        <p class="results" data-r="results" hidden></p>
         <ul class="grid" data-r="grid"></ul>
       </section>
       <details class="rejected" data-r="rejWrap"><summary>Recently left out by the filter</summary>
@@ -111,10 +112,24 @@ function renderReport(root, DATA, INFO, opts = {}) {
     root._filter = "rated";
     const rerender = () => renderReport(root, root._data, root._info, opts);
     root.querySelectorAll("select,[data-r=q]").forEach(el => el.addEventListener("input", rerender));
-    search?.addEventListener("input", rerender);
+    // Searching shows the results right away: the grid is far below the search box
+    const toResults = () => {
+      const apps = root.querySelector("#apps");
+      if (apps.getBoundingClientRect().top > innerHeight * 0.6 || apps.getBoundingClientRect().bottom < 0)
+        apps.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    for (const box of [search, root.querySelector("[data-r=q]")].filter(Boolean)) {
+      box.addEventListener("input", () => { rerender(); if (box.value.trim()) toResults(); });
+      box.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); toResults(); } });
+    }
     root.addEventListener("click", ev => {
       const c = ev.target.closest("[data-cat]");
       if (c) { root._cat = root._cat === c.dataset.cat ? "" : c.dataset.cat; rerender(); return; }
+      if (ev.target.closest("[data-clear]")) {
+        for (const box of [search, root.querySelector("[data-r=q]")].filter(Boolean)) box.value = "";
+        rerender();
+        return;
+      }
       const f = ev.target.closest("[data-filter]");
       if (f) {
         root._filter = root._filter === f.dataset.filter && f.closest("[data-r=legend]") ? "all" : f.dataset.filter;
@@ -193,10 +208,13 @@ function renderReport(root, DATA, INFO, opts = {}) {
     .map(([v, t, n]) => `<button type="button" class="cat" data-cat="${esc(v)}" aria-pressed="${(root._cat || "") === v}">${esc(t)} <span class="n">${n}</span></button>`).join("") : "";
 
   const q = (search || $("q")).value.trim().toLowerCase();
-  const f = root._filter;
+  // A search looks through every rating, not only the current filter
+  const f = q && root._filter === "rated" ? "all" : root._filter;
   let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? e.reception.verdict !== "too-early" : e.reception.verdict === f))) &&
     (!pick || what(e) === pick) && (!root._cat || e.category === root._cat));
-  if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.original_clean, e.category, e.summary, e.author?.username, e.repo, e.product, e.posts?.map(p => p.author)]).toLowerCase().includes(q));
+  if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.original_clean, e.category, e.summary, e.author?.username, e.repo, e.product, e.posts?.map(p => [p.author, p.text])]).toLowerCase().includes(q));
+  $("results").hidden = !q;
+  if (q) $("results").innerHTML = `${rows.length ? `<b>${rows.length}</b> ${rows.length === 1 ? "result" : "results"}` : "No results"} for “${esc(q)}” <button type="button" data-clear>Clear search</button>`;
   const sorts = {
     score: e => e.reception.score - (e.reception.verdict === "stay-away" ? 1000 : 0), likes: e => e.metrics.likes,
     stars: e => e.github?.stars ?? -1, downloads: e => e.github?.downloads ?? -1, newest: e => Date.parse(e.created_at),
