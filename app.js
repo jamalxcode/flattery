@@ -22,7 +22,7 @@ themeBtn.addEventListener("click", () => {
 $("surprise").addEventListener("click", () => {
   if (!live) return;
   const ok = (live.groups || live.results).filter(e => e.status !== "gone");
-  const pool = ok.filter(e => e.reception.verdict === "well-received");
+  const pool = ok.filter(e => ["well-received", "proven"].includes(e.reception.verdict));
   const list = pool.length ? pool : ok;
   if (list.length) $("live").flattery?.open(list[Math.floor(Math.random() * list.length)].id);
 });
@@ -30,6 +30,7 @@ $("surprise").addEventListener("click", () => {
 // A shared link (#p=<id>) opens that project once the catalog has loaded
 let hashOpened = false;
 function openFromHash() {
+  if (location.hash.startsWith("#news")) return document.getElementById("news")?.scrollIntoView();
   const m = location.hash.match(/^#p=(.+)$/);
   if (!m || hashOpened) return;
   hashOpened = true;

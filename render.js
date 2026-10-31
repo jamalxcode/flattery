@@ -3,7 +3,8 @@
 // and the standalone report. opts.search: an <input> outside root to filter with.
 // opts.base: where the catalog's files (thumbnails) live, relative to the page ("data/").
 const RATINGS = [
-  ["well-received", "❤️", "Loved", "Real use on GitHub (the poster's own repo, lots of stars or downloads) and people aren't against it.", "loved"],
+  ["well-received", "❤️", "Loved", "Real use on GitHub and a real crowd on X, mostly positive.", "loved"],
+  ["proven", "⭐", "Proven on GitHub", "Lots of stars or downloads on the poster's own repo, but quiet on X so far.", "proven"],
   ["unconfirmed", "🔥", "Hyped, unproven", "Lots of buzz on X, but no repo or one nobody uses yet.", "hype"],
   ["too-early", "🆕", "New & untested", "Too new or too small to judge yet.", "new"],
   ["mixed", "😐", "Mixed", "People are split on it.", "mixed"],
@@ -11,14 +12,26 @@ const RATINGS = [
 ];
 
 // Order for promotions and demotions
-const RANK = { "stay-away": 0, "too-early": 1, mixed: 2, unconfirmed: 3, "well-received": 4 };
+const RANK = { "stay-away": 0, "too-early": 1, mixed: 2, unconfirmed: 3, proven: 3.5, "well-received": 4 };
+const SITE = "https://flattery.sala.company/";
+const CATEGORIES = ["Design", "Office", "Dev tools", "AI", "Media", "Utilities", "Communication", "Business", "Games", "Other"];
+// Approximate yearly list prices (USD) of originals, for "saves about $X a year"
+const PRICES = {
+  "adobe photoshop": 264, "photoshop": 264, "adobe lightroom": 120, "lightroom": 120, "adobe illustrator": 264, "illustrator": 264,
+  "adobe premiere pro": 264, "premiere pro": 264, "adobe after effects": 264, "after effects": 264, "adobe indesign": 264, "indesign": 264,
+  "adobe acrobat": 240, "acrobat": 240, "adobe creative cloud": 720, "adobe creative suite": 720,
+  "microsoft word": 100, "microsoft excel": 100, "microsoft powerpoint": 100, "microsoft office": 100, "microsoft 365": 100,
+  "autocad": 2030, "autodesk autocad": 2030, "canva": 120, "notion": 120, "slack": 105, "grammarly": 144, "dropbox": 120, "1password": 36,
+};
 
 function renderReport(root, DATA, INFO, opts = {}) {
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const num = v => (v || 0).toLocaleString("en", { notation: v >= 10000 ? "compact" : "standard", maximumFractionDigits: 1 });
-  const rating = v => RATINGS.find(r => r[0] === v) || RATINGS[3];
+  const rating = v => RATINGS.find(r => r[0] === v) || RATINGS.find(r => r[0] === "mixed");
   const label = p => p.vendor === p.name ? p.name : `${p.vendor} ${p.name}`;
-  const what = e => e.product ? label(e.product) : e.original;
+  const what = e => e.product ? label(e.product) : (e.original_clean || e.original);
+  const price = e => PRICES[String(e.original_clean || "").toLowerCase()] || (e.product && PRICES[label(e.product).toLowerCase()]);
+  const xIntent = (text, url) => "https://x.com/intent/tweet?text=" + encodeURIComponent(text) + (url ? "&url=" + encodeURIComponent(url) : "");
   const name = e => e.project || e.repo?.split("/")[1] || what(e) && `${what(e)} clone` || "Untitled";
   const OF = { clone: "Clone of", "reverse-engineered": "Reverse-engineered", reimagined: "Reimagined", port: "Port of" };
   const ofLine = e => what(e) ? `${OF[e.kind] || "Clone of"} ${what(e)}` : (e.kind || "clone");
@@ -67,10 +80,12 @@ function renderReport(root, DATA, INFO, opts = {}) {
         </div>
         <div class="legend"><h2>Ratings</h2><div data-r="legend"></div></div>
       </section>
+      <section class="news" id="news" data-r="newsWrap"></section>
       <section class="fresh" data-r="riseWrap"><h2 class="section-title">📈 Rising on GitHub</h2><ul class="shelf" data-r="rise"></ul></section>
       <section class="fresh" data-r="upWrap"><h2 class="section-title">⬆ Just promoted</h2><ul class="shelf" data-r="up"></ul></section>
       <section class="fresh" data-r="shelfWrap"><h2 class="section-title">❤️ Most loved</h2><ul class="shelf" data-r="shelf"></ul></section>
       <section id="apps">
+        <div class="cats" data-r="cats"></div>
         <div class="filters-row">
           <div class="filters" data-r="filters"></div>
           <div class="selects">
@@ -85,8 +100,12 @@ function renderReport(root, DATA, INFO, opts = {}) {
         <ul class="grid" data-r="grid"></ul>
       </section>
       <details class="rejected" data-r="rejWrap"><summary>Recently left out by the filter</summary>
-        <p class="note-small">Popular posts Claude Haiku judged not to be clone announcements. If one should be here, add it with a name search or overrides.json.</p>
+        <p class="note-small">Popular posts Claude Haiku judged not to be clone announcements.</p>
         <ul class="posts" data-r="rej"></ul></details>
+      <details class="rejected" data-r="downWrap"><summary data-r="downTitle">Taken down after objections</summary>
+        <p class="note-small">Listings removed automatically after enough people objected on X (six or more established accounts, real reasons, spread over time).</p>
+        <ul class="posts" data-r="down"></ul></details>
+      <details class="rejected" data-r="statusWrap"><summary>Status</summary><div data-r="statusBody"></div></details>
       <dialog class="sheet" data-r="sheet"></dialog>`;
     root.dataset.ready = "1";
     root._filter = "rated";
@@ -94,6 +113,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
     root.querySelectorAll("select,[data-r=q]").forEach(el => el.addEventListener("input", rerender));
     search?.addEventListener("input", rerender);
     root.addEventListener("click", ev => {
+      const c = ev.target.closest("[data-cat]");
+      if (c) { root._cat = root._cat === c.dataset.cat ? "" : c.dataset.cat; rerender(); return; }
       const f = ev.target.closest("[data-filter]");
       if (f) {
         root._filter = root._filter === f.dataset.filter && f.closest("[data-r=legend]") ? "all" : f.dataset.filter;
@@ -165,11 +186,17 @@ function renderReport(root, DATA, INFO, opts = {}) {
   $("product").innerHTML = '<option value="">Clones of anything</option>' + [...counts].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
     .map(([p, c]) => `<option value="${esc(p)}"${p === pick ? " selected" : ""}>${esc(p)} (${c})</option>`).join("");
 
+  // Categories, like an app store
+  const catCount = new Map();
+  for (const e of live) if (e.category) catCount.set(e.category, (catCount.get(e.category) || 0) + 1);
+  $("cats").innerHTML = catCount.size ? [["", "All categories", live.length], ...CATEGORIES.filter(c => catCount.has(c)).map(c => [c, c, catCount.get(c)])]
+    .map(([v, t, n]) => `<button type="button" class="cat" data-cat="${esc(v)}" aria-pressed="${(root._cat || "") === v}">${esc(t)} <span class="n">${n}</span></button>`).join("") : "";
+
   const q = (search || $("q")).value.trim().toLowerCase();
   const f = root._filter;
   let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? e.reception.verdict !== "too-early" : e.reception.verdict === f))) &&
-    (!pick || what(e) === pick));
-  if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.summary, e.author?.username, e.repo, e.product]).toLowerCase().includes(q));
+    (!pick || what(e) === pick) && (!root._cat || e.category === root._cat));
+  if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.original_clean, e.category, e.summary, e.author?.username, e.repo, e.product, e.posts?.map(p => p.author)]).toLowerCase().includes(q));
   const sorts = {
     score: e => e.reception.score - (e.reception.verdict === "stay-away" ? 1000 : 0), likes: e => e.metrics.likes,
     stars: e => e.github?.stars ?? -1, downloads: e => e.github?.downloads ?? -1, newest: e => Date.parse(e.created_at),
@@ -183,12 +210,12 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <div class="art">${art(e)}<span class="rate"><i>${emo}</i>${rname}</span></div>
       <div class="card-body">
         <h3><button type="button" data-open="${esc(e.id)}">${esc(name(e))}</button></h3>
-        <p class="of">${esc(ofLine(e))}</p>
+        <p class="of">${esc(ofLine(e))}${price(e) ? ` <span class="save">saves ~$${price(e)}/yr</span>` : ""}</p>
         ${moveLine(e)}
         ${e.summary ? `<p class="sum">${esc(e.summary)}</p>` : ""}
         <div class="stats"><span class="score">${e.reception.score}</span><span>♥ ${num(e.metrics.likes)}</span>
           ${e.github && e.github.status !== "gone" && e.reception.repo_counted !== false ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
-          <span>${e.group ? `${e.posts.length} posts` : `@${esc(e.author.username)}`}</span></div>
+          <span>${e.group ? `${e.posts.length} posts` : `@${esc(e.author.username)}`}</span>${e.objections ? `<span class="obj" title="objections counted">⚑ ${e.objections}</span>` : ""}</div>
         ${mini(e.sentiment)}
       </div></article></li>`;
   }).join("") : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
@@ -196,6 +223,35 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const rej = [...(INFO.rejected_samples || [])].reverse().slice(0, 30);
   $("rejWrap").hidden = !rej.length;
   $("rej").innerHTML = rej.map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc(p.at)}</span><small>${esc(p.text)}</small></li>`).join("");
+
+  // Newsletter: the latest issue, then the archive
+  const issues = INFO.newsletter || [];
+  const issueHtml = (n, latest) => `<div class="issue">
+      <p class="issue-date">${latest ? "📰 This week in clones · " : ""}${esc(new Date(n.date + "T12:00:00Z").toLocaleDateString("en", { day: "numeric", month: "long", year: "numeric" }))}</p>
+      <h${latest ? 2 : 3}>${esc(n.title)}</h${latest ? 2 : 3}><p>${esc(n.intro)}</p>
+      <ul>${n.items.map(i => `<li><button type="button" data-open="${esc(i.id)}">${rating(i.verdict)[1]} <b>${esc(i.name)}</b></button> ${esc(i.blurb)}</li>`).join("")}</ul>
+      <p>${esc(n.outro)}</p>
+      <a class="xshare" href="${esc(xIntent(`📰 This week in clones: ${n.title}`, SITE + "#news=" + n.date))}" target="_blank" rel="noopener">Share on X</a></div>`;
+  $("newsWrap").hidden = !issues.length;
+  $("newsWrap").innerHTML = issues.length ? issueHtml(issues[0], true) + (issues.length > 1
+    ? `<details class="past"><summary>Past issues (${issues.length - 1})</summary>${issues.slice(1).map(n => issueHtml(n, false)).join("")}</details>` : "") : "";
+
+  const down = [...(INFO.removed_projects || [])].reverse();
+  $("downWrap").hidden = !down.length;
+  $("downTitle").textContent = `Taken down after objections (${down.length})`;
+  $("down").innerHTML = down.map(r => `<li><b>${esc(r.name)}</b> <span>${esc(r.at)} · ${r.objections} objections</span></li>`).join("");
+
+  // Status: scans run every 8 hours; this shows whether they do
+  const runs = INFO.status || [];
+  const last = Date.parse(INFO.generated_iso || runs.at(-1)?.at || 0);
+  const hoursAgo = last ? (Date.now() - last) / 36e5 : null;
+  const week = runs.filter(r => Date.now() - Date.parse(r.at) < 7 * 864e5);
+  $("statusWrap").hidden = !runs.length && !last;
+  $("statusBody").innerHTML = `<ul class="statuslist">
+    <li>${hoursAgo == null ? "No scan yet" : hoursAgo < 10 ? "🟢 On schedule" : hoursAgo < 26 ? "🟡 Running late" : "🔴 Scans have stopped"} · last scan ${hoursAgo == null ? "never" : hoursAgo < 1 ? "under an hour ago" : `${Math.round(hoursAgo)} hours ago`}</li>
+    <li>${week.length} scans in the last 7 days (expected about 21), ${num(week.reduce((s, r) => s + (r.added || 0), 0))} new posts, ${num(week.reduce((s, r) => s + (r.changed || 0), 0))} rating changes</li>
+    ${INFO.month ? `<li>X reads this month: ${num(INFO.month.reads)} of ${num(INFO.month.cap)}${INFO.month.reads >= INFO.month.cap ? " (budget reached: scans pause reading X until next month)" : ""}</li>` : ""}
+    <li>${num(live.length)} projects from ${num(DATA.reduce((s, e) => s + (e.posts?.length || 1), 0))} posts</li></ul>`;
 
   root.flattery = {
     open(id) {
@@ -226,6 +282,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
             <a${e.repo && cls !== "danger" ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener">Open the post on X</a>
             ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow">☠️ Repo (don't run it)</a>` : ""}
             <a href="#p=${encodeURIComponent(e.id)}" data-share="${esc(e.id)}" onclick="event.preventDefault()">Copy link</a>
+            <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, SITE + "#p=" + encodeURIComponent(e.id)))}" target="_blank" rel="noopener">Share on X</a>
           </div>
           ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>@${esc(e.author.username)} · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
           ${e.group ? `<div><h4>${e.posts.length} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
@@ -234,7 +291,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <div><h4>On X${e.group ? " · all posts" : ""}</h4><div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div></div>
           ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes${e.reception.confidence === "low" ? ' · <span class="low">low confidence</span>' : ""}</h4>${mini(s)}
             <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
-          ${s?.flags?.length ? `<div><h4>Red flags people raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div>
+          ${s?.flags?.length ? `<div><h4>What people on X raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div>
             ${Object.entries(s.evidence || {}).length ? `<ul class="posts evidence">${Object.entries(s.evidence).flatMap(([fl, list]) => list.map(r => `<li>
               <span class="chip flag">${esc(fl.replaceAll("-", " "))}</span> <a href="${esc(r.url)}" target="_blank" rel="noopener">@${esc(r.author)}</a>
               <small>${esc(r.text)}</small></li>`)).join("")}</ul>` : ""}</div>` : ""}
@@ -242,6 +299,9 @@ function renderReport(root, DATA, INFO, opts = {}) {
             ${g.status === "archived" ? '<p class="note-small">This repo is archived.</p>' : ""}</div>`
             : `<p class="note-small">${e.repo ? "The linked repo was removed." : "No GitHub repo linked yet, so it can't be confirmed."}</p>`}
           ${e.reception.reasons.length ? `<div class="chips">${e.reception.reasons.map(r => `<span class="chip">${esc(r)}</span>`).join("")}</div>` : ""}
+          <div class="object"><h4>Is this listing wrong?</h4>
+            <p class="note-small">Post an objection on X with your reason. When six or more established accounts object for real reasons, spread over at least two hours, the listing comes down by itself.${e.objections ? ` <b>⚑ ${e.objections} of 6 counted so far.</b>` : ""}</p>
+            <a class="xobject" href="${esc(xIntent(`Please remove "${name(e)}" from Flattery (flattery.sala.company): <your reason> #FlatteryRemove ${e.code || ""}`))}" target="_blank" rel="noopener">⚑ Object on X</a></div>
           <p class="note-small">Score parts: ${Object.entries(e.reception.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}. Crowd opinion, not a legal or technical judgement.</p>
         </div>`;
       if (!sheet.open) sheet.showModal();

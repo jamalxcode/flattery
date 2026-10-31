@@ -49,6 +49,7 @@ const replyPosts = {
   p3: Array.from({ length: 10 }, (_, i) => post(`r3${i}`, "fan", i < 8 ? "doesn't even start, and it's a wrapper" : "ok", 49, metrics(1, 0, 0, 0, 0))),
 };
 let deleted = new Set();
+let complaintPosts = [];
 let archiveRefused = false;
 // an older popular post only full-archive search can find
 const oldPost = post("p9", "u3", "I reverse engineered the AirDrop protocol, open source", 15 * 24, metrics(3000, 600, 150, 40, 200000), "https://github.com/carol/opendrop");
@@ -65,6 +66,7 @@ globalThis.fetch = async url => {
     const q = u.searchParams.get("query");
     const conv = q.match(/conversation_id:(\w+)/);
     if (conv) return pack(replyPosts[conv[1]] || []);
+    if (q.startsWith("#FlatteryRemove")) return pack(complaintPosts);
     if (u.searchParams.get("since_id")) return pack([]);
     if (u.pathname.endsWith("/all")) return pack([oldPost, posts.p4]);
     return pack(Object.values(posts).filter(p => !deleted.has(p.id)));
@@ -80,6 +82,10 @@ globalThis.fetch = async url => {
 };
 
 const haiku = {
+  async classify(list) { return new Map(list.map(e => [e.id, { category: "Design", original_clean: e.original || "" }])); },
+  async match(list) { return new Map(list.map(e => [e.id, ""])); },
+  async complaints(list) { return new Map(list.map(c => [c.id, !/spam/.test(c.text)])); },
+  async newsletter(facts) { return { title: "Week", intro: "Intro", items: facts.items.slice(0, 2).map(i => ({ id: i.id, blurb: "b" })), outro: "Bye" }; },
   async triage(list) {
     return new Map(list.map(p => [p.id, p.id === "p5"
       ? { id: p.id, kind: "not-a-clone", original: "", project: "", summary: "" }
@@ -116,14 +122,17 @@ assert.equal(pickReadmeImage("no images here", "a/b"), null);
 const small = { created_at: new Date(T0 - 72 * H).toISOString(), author: { username: "ChrisTitusTech", followers: 100 }, repo: "ChrisTitusTech/winutil",
   metrics: { likes: 7, reposts: 0, replies: 1, quotes: 0, bookmarks: 1, views: 900 },
   github: { status: "ok", repo: "ChrisTitusTech/winutil", created: "2022-01-01", stars: 65300, downloads: 5700000, stars_history: [] } };
-assert.equal(score(small, T0).verdict, "well-received");
+assert.equal(score(small, T0).verdict, "proven", "lots of stars but a quiet X post is proven, not loved");
+assert.equal(score({ ...small, metrics: { ...small.metrics, likes: 400, reposts: 60 } }, T0).verdict, "well-received", "stars and a crowd is loved");
 assert.equal(score({ ...small, sentiment: { positive: 1, neutral: 2, negative: 7, sampled: 10, flags: ["scam-or-malware"] } }, T0).verdict, "stay-away");
 assert.equal(score({ ...small, github: { ...small.github, stars: 150, downloads: 0 } }, T0).verdict !== "too-early", true, "100+ stars is never new & untested");
 // Someone else's famous repo lends no stars; a brand-new repo counts whoever shares it
 const curator = { ...small, author: { username: "matchaman11", followers: 100 } };
 assert.equal(score(curator, T0).verdict, "too-early");
 assert.equal(score(curator, T0).repo_counted, false);
-assert.equal(score({ ...curator, github: { ...small.github, created: new Date(T0 - 30 * 864e5).toISOString().slice(0, 10) } }, T0).verdict, "well-received");
+assert.equal(score({ ...curator, author_built_it: true, github: { ...small.github, stars: 900 } }, T0).repo_counted, true, "an author who says they built it owns a non-famous repo");
+assert.equal(score({ ...curator, author_built_it: true }, T0).repo_counted, false, "but not a famous one");
+assert.equal(score({ ...curator, github: { ...small.github, created: new Date(T0 - 30 * 864e5).toISOString().slice(0, 10) } }, T0).verdict, "proven");
 
 // Red flags need two different accounts, and keep their replies as evidence
 const hk = Object.create(Haiku.prototype);
@@ -228,6 +237,28 @@ const lead = [mkp("l1", "PhotoCraft", 5, "storytold/photocraft"), mkp("l2", "Pho
 for (const e of lead) e.reception = score(e, T0);
 assert.equal(buildGroups(lead, [], "2026-10-30", T0).length, 1);
 assert.ok(r1.groups.length >= 1 && r1.groups.every(g => g.reception && g.history.length));
+
+// The week's newsletter is written from rating changes
+assert.ok(r1.info.newsletter?.length === 1 && r1.info.newsletter[0].items.length === 2, "a newsletter issue is written");
+assert.ok(by(r1, "p1").category, "new entries get a category");
+assert.ok(r1.groups.every(g => g.code && g.code.startsWith("fr")), "every card has an objection code");
+
+// Six spread-out objections from established accounts take a listing down; a burst doesn't
+const { postCode, parseCode } = await import("../complaints.js");
+assert.equal(parseCode("I vibe coded this with friends"), null, "a word starting with fr isn't a code");
+assert.equal(parseCode("bad listing #FlatteryRemove frabc12"), "frabc12".slice(0, 7));
+const code = postCode("p1");
+for (let i = 0; i < 8; i++) users["c" + i] = { id: "c" + i, username: "critic" + i, created_at: "2020-01-01T00:00:00Z", public_metrics: { followers_count: 100 } };
+complaintPosts = Array.from({ length: 6 }, (_, i) => ({ ...post("k" + i, "c" + i, `Please remove "Proj p1" from Flattery: this listing is wrong, reason number ${i} is real #FlatteryRemove ${code}`, 60 - i * 0.5, metrics(0, 0, 0, 0, 0)) }));
+const x7 = new X("token", log, { maxReads: 3000 });
+const r7 = await run(r1, { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, { x: x7, haiku, githubStats, log, now: T0 + 48 * H });
+assert.ok(!r7.groups.some(g => g.posts.some(p => p.id === "p1")), "the listing is taken down");
+assert.equal(r7.info.removed_projects.at(-1).objections, 6);
+complaintPosts = Array.from({ length: 6 }, (_, i) => ({ ...post("b" + i, "c" + i, `Remove this listing now please, burst number ${i} of complaints here #FlatteryRemove ${postCode("p2")}`, 10, metrics(0, 0, 0, 0, 0)) }));
+const r8 = await run(r1, { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, { x: new X("token", log, { maxReads: 3000 }), haiku, githubStats, log, now: T0 + 48 * H });
+assert.ok(r8.groups.some(g => g.posts.some(p => p.id === "p2")), "a burst of objections at the same time doesn't");
+assert.equal(r8.groups.find(g => g.posts.some(p => p.id === "p2")).objections, 2);
+complaintPosts = [];
 
 console.log(`ok: ${r1.results.length} posts, ${firstReads} + ${x2.reads} X reads`);
 for (const e of r2.results) console.log(`  ${String(e.reception.score).padStart(3)} ${e.reception.verdict.padEnd(13)} ${e.id} ${JSON.stringify(e.reception.parts)} ${e.reception.reasons.join("; ")}`);

@@ -53,7 +53,15 @@ if (a.cache) {
 let overrides = {};
 try { overrides = JSON.parse(await readFile(new URL("overrides.json", root), "utf8")); } catch {}
 
-const x = new X(xToken, log, { maxReads: +a["max-reads"], maxWait: +a["max-wait"] });
+// Monthly X budget: once a month's reads pass X_MONTHLY_READS (default 60,000), runs read
+// nothing more from X until the month turns; GitHub checks and scoring carry on
+const month = new Date().toISOString().slice(0, 7);
+const monthCap = +(process.env.X_MONTHLY_READS || 60000);
+const usedThisMonth = prev?.info?.month?.key === month ? prev.info.month.reads : 0;
+const maxReads = Math.max(0, Math.min(+a["max-reads"], monthCap - usedThisMonth));
+if (maxReads < +a["max-reads"]) log(`monthly X budget: ${usedThisMonth} of ${monthCap} reads used, ${maxReads} left for this run`, "warn");
+
+const x = new X(xToken, log, { maxReads, maxWait: +a["max-wait"] });
 const haiku = new Haiku(log);
 const { results, groups, info: runInfo } = await run(prev, {
   rotate: a.rotate ? Math.floor(Date.now() / 288e5) : 0,
@@ -115,6 +123,10 @@ const info = {
   run: { ...runInfo.counts, x_reads: x.reads, ...(costPerRead && { x_cost_usd: Math.round(x.reads * costPerRead * 100) / 100 }), x_calls: x.calls, haiku_calls: haiku.calls, haiku_tokens: haiku.tokens, seconds: Math.round((Date.now() - t0) / 1000) },
 };
 delete info.counts;
+info.month = { key: month, reads: usedThisMonth + x.reads, cap: monthCap };
+// Status for the page: the last 60 runs
+info.status = [...(prev?.info?.source === "x" ? prev.info.status || [] : []),
+  { at: info.generated_iso, reads: x.reads, added: info.run.added || 0, changed: info.run.changed || 0, seconds: info.run.seconds }].slice(-60);
 await mkdir(a.out, { recursive: true });
 await writeFile(`${a.out}/latest.json`, JSON.stringify({ info, results, groups }));
 const [css, renderJs, index] = await Promise.all(["style.css", "render.js", "index.html"].map(f => readFile(new URL(f, root), "utf8")));
@@ -122,9 +134,9 @@ const noteHtml = index.match(/<section class="about">([\s\S]*?)<\/section>/)?.[1
 await writeFile(`${a.out}/latest.html`, reportHtml({ css, renderJs, noteHtml, results: groups, info }));
 
 // RSS: newly rated and newly promoted projects of the last two weeks
-const site = (process.env.SITE_URL || "https://jamalxcode.github.io/flattery/").replace(/\/?$/, "/");
+const site = "https://flattery.sala.company/";
 const xml = s => String(s ?? "").replace(/[<>&'"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]));
-const LABEL = { "well-received": "❤️ Loved", unconfirmed: "🔥 Hyped, unproven", mixed: "😐 Mixed", "stay-away": "☠️ Don't touch", "too-early": "🆕 New & untested" };
+const LABEL = { "well-received": "❤️ Loved", proven: "⭐ Proven on GitHub", unconfirmed: "🔥 Hyped, unproven", mixed: "😐 Mixed", "stay-away": "☠️ Don't touch", "too-early": "🆕 New & untested" };
 const fresh = groups.filter(g => g.status === "ok" && g.reception.verdict !== "too-early" && g.history?.length &&
   Date.now() - Date.parse(g.history.at(-1).at) < 14 * 864e5).sort((p, q) => q.history.at(-1).at.localeCompare(p.history.at(-1).at)).slice(0, 40);
 await writeFile(`${a.out}/feed.xml`, `<?xml version="1.0" encoding="utf-8"?>
@@ -137,6 +149,8 @@ ${fresh.map(g => {
   return `<item><title>${xml(`${LABEL[g.reception.verdict]}: ${name}${g.original ? ` (≈ ${g.original})` : ""}`)}</title><link>${xml(link)}</link><guid isPermaLink="false">${xml(g.id + ":" + g.history.at(-1).at + ":" + g.reception.verdict)}</guid>
 <pubDate>${new Date(g.history.at(-1).at + "T12:00:00Z").toUTCString()}</pubDate><description>${xml(`${prevV ? `${LABEL[prevV]} → ${LABEL[g.reception.verdict]}. ` : ""}${g.summary || ""} Score ${g.reception.score}.`)}</description></item>`;
 }).join("\n")}
+${(info.newsletter || []).slice(0, 8).map(n => `<item><title>${xml(`This week in clones: ${n.title}`)}</title><link>${xml(`${site}#news=${n.date}`)}</link><guid isPermaLink="false">news:${n.date}</guid>
+<pubDate>${new Date(n.date + "T08:00:00Z").toUTCString()}</pubDate><description>${xml(`${n.intro} ${n.items.map(i => `${i.name}: ${i.blurb}`).join(" ")} ${n.outro}`)}</description></item>`).join("\n")}
 </channel></rss>
 `);
 

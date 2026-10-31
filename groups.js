@@ -8,10 +8,16 @@
 // ("PhotoCraft, VectorCraft, FilmCraft"), extensions of its name ("ArtCraft Launcher"), and
 // lone posts about one of its apps ("EffectCraft"). Remaining stray posts without a repo join
 // an existing project they lead with ("PhotoCraft web version", "PhotoCraft, VectorCraft…").
-import { score } from "./reception.js";
+import { score, FAMOUS } from "./reception.js";
 
 const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const GENERIC = /clone|alternative|copy|replacement|version|untitled/;
+
+const mode = list => {
+  const n = new Map();
+  for (const v of list) if (v) n.set(v, (n.get(v) || 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1])[0]?.[0];
+};
 
 export function nameKey(e) {
   const n = norm(e.project);
@@ -21,9 +27,15 @@ export function nameKey(e) {
 
 // posts: per-post entries, already scored. prevGroups: last run's groups, for history.
 // overrides (overrides.json): attach post ids to a project, keep some separate, hide some.
-export function buildGroups(posts, prevGroups = [], today = new Date().toISOString().slice(0, 10), now = Date.now(), overrides = {}) {
+// removed: post ids taken down after objections (complaints.js).
+export function buildGroups(posts, prevGroups = [], today = new Date().toISOString().slice(0, 10), now = Date.now(), overrides = {}, removed = new Set()) {
   const hidden = new Set(overrides.hide || []), separate = new Set(overrides.separate || []);
-  posts = posts.filter(e => !hidden.has(e.id));
+  posts = posts.filter(e => !hidden.has(e.id) && !removed.has(e.id))
+    // A famous repo the poster doesn't own (Linux, Expo…) never becomes the card's subject:
+    // the post keeps its own project name without the repo, or leaves the page if it has none
+    .map(e => e.github && e.github.status !== "gone" && e.reception && !e.reception.repo_counted && e.github.stars >= FAMOUS
+      ? { ...e, foreign_repo: e.repo, repo: null, github: undefined, repos: [] } : e)
+    .filter(e => !e.foreign_repo || nameKey(e) || (e.project && !/\//.test(e.project)));
   // Union-find over post ids
   const parent = new Map(posts.map(e => [e.id, e.id]));
   const find = id => { while (parent.get(id) !== id) { parent.set(id, parent.get(parent.get(id))); id = parent.get(id); } return id; };
@@ -103,7 +115,15 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
     const own = pool.filter(e => e.github && e.github.status !== "gone" && e.reception?.repo_counted)
       .sort((a, b) => b.github.stars - a.github.stars)[0];
     const anyRepo = own || pool.find(e => e.repo);
-    const sum = k => pool.reduce((s, e) => s + (e.metrics[k] || 0), 0);
+    // One post per account counts toward the numbers (its most liked), so a curator posting
+    // the same project five times doesn't inflate it
+    const best = new Map();
+    for (const e of pool) {
+      const who = e.author?.id || e.author?.username || e.id;
+      if (!best.has(who) || e.metrics.likes > best.get(who).metrics.likes) best.set(who, e);
+    }
+    const counted = [...best.values()];
+    const sum = k => counted.reduce((s, e) => s + (e.metrics[k] || 0), 0);
     const sentiments = pool.map(e => e.sentiment).filter(s => s?.sampled);
     const names = new Map();
     for (const e of pool) {
@@ -135,6 +155,8 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
         summary: [...sentiments].sort((a, b) => b.sampled - a.sampled)[0].summary,
       } : undefined,
       found_by: [...new Set(list.flatMap(e => e.found_by || []))],
+      category: mode(pool.map(e => e.category)),
+      original_clean: mode(pool.map(e => e.original_clean)) || lead.original_clean,
       first_seen: list.map(e => e.first_seen).filter(Boolean).sort()[0],
       posts: [...list].sort((a, b) => b.metrics.likes - a.metrics.likes).map(e => ({
         id: e.id, url: e.url, author: e.author?.username, likes: e.metrics.likes, created_at: e.created_at,

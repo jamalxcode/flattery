@@ -15,6 +15,7 @@ const round = v => Math.round(v);
 
 export const VERDICTS = {
   "well-received": "Well received",
+  proven: "Proven on GitHub",
   unconfirmed: "Buzz, not confirmed on GitHub",
   mixed: "Mixed",
   "stay-away": "Stay away",
@@ -37,9 +38,14 @@ export const reached = m => m.likes >= MIN_REACH.likes || m.reposts >= MIN_REACH
 // when it was created at most NEW_REPO_DAYS before the post (so it's the clone itself, even
 // if a curator shared it). Anything else is someone else's project, often the original.
 export const NEW_REPO_DAYS = 120;
+// A repo this starred that isn't the poster's own is a famous project someone linked to: it
+// never becomes the subject of a card (no "Linux: don't touch").
+export const FAMOUS = 10000;
 const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 export function ownsRepo(entry, gh = entry.github) {
   if (entry.repo_owned != null) return entry.repo_owned; // set by a merge or by overrides.json
+  // The author says they built it (Haiku, from the post); trusted below famous-project size
+  if (entry.author_built_it && (gh?.stars ?? 0) < FAMOUS) return true;
   const rawOwner = (gh?.repo || entry.repo || "").split("/")[0];
   const owner = norm(rawOwner);
   if (!owner) return false;
@@ -108,9 +114,13 @@ export function score(entry, now = Date.now()) {
   total = Math.max(0, Math.min(100, round(total)));
 
   let verdict;
-  if (serious.length) { verdict = "stay-away"; reasons.push(`red flag: ${serious.join(", ")}`); }
+  if (serious.length) { verdict = "stay-away"; reasons.push(`people on X raised: ${serious.map(f => f.replaceAll("-", " ")).join(", ")}`); }
   else if (entry.github?.status === "gone") verdict = "stay-away";
-  else if (strong) {
+  else if ((strong || confirmed) && !reached(m) && (net == null || net > -0.2)) {
+    // Real use on GitHub but a quiet post on X: proven, not (yet) loved by a crowd
+    verdict = "proven";
+    reasons.push(`${gh.stars.toLocaleString("en")} GitHub stars${gh.downloads ? ` and ${gh.downloads.toLocaleString("en")} downloads` : ""}, quiet on X`);
+  } else if (strong) {
     // Lots of stars or downloads: well received, unless the replies are clearly negative
     verdict = net != null && net <= -0.2 ? "mixed" : "well-received";
     reasons.push(`${gh.stars.toLocaleString("en")} GitHub stars${gh.downloads ? ` and ${gh.downloads.toLocaleString("en")} downloads` : ""}`);
