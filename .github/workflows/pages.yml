@@ -107,6 +107,8 @@ jobs:
             commit -q -m "Catalog $(date -u +%Y-%m-%dT%H:%MZ)" || { echo "catalog unchanged"; exit 0; }
           git push -q origin data
       - run: rm -rf node_modules
+      # New file names each deploy, so browsers never keep running an old script
+      - run: sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" index.html
       - uses: actions/upload-pages-artifact@v4
         with: { path: . }
       - id: deployment

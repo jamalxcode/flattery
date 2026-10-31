@@ -212,7 +212,17 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const f = q && root._filter === "rated" ? "all" : root._filter;
   let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? e.reception.verdict !== "too-early" : e.reception.verdict === f))) &&
     (!pick || what(e) === pick) && (!root._cat || e.category === root._cat));
-  if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.original_clean, e.category, e.summary, e.author?.username, e.repo, e.product, e.posts?.map(p => [p.author, p.text])]).toLowerCase().includes(q));
+  // Every word must appear somewhere in the project: its name, what it clones, its rating,
+  // category, repo, summary, posters and posts ("adobe photoshop", "loved word", "rust")
+  if (q) {
+    const fold = s => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+    const words = fold(q).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    rows = rows.filter(e => {
+      const hay = fold([name(e), e.project, what(e), e.original, e.original_clean, e.product && label(e.product), e.category, e.kind,
+        rating(e.reception.verdict)[2], e.summary, e.text, e.repo, e.author?.username, ...(e.posts || []).flatMap(p => [p.author, p.text])].join(" "));
+      return words.every(w => hay.includes(w));
+    });
+  }
   $("results").hidden = !q;
   if (q) $("results").innerHTML = `${rows.length ? `<b>${rows.length}</b> ${rows.length === 1 ? "result" : "results"}` : "No results"} for “${esc(q)}” <button type="button" data-clear>Clear search</button>`;
   const sorts = {
