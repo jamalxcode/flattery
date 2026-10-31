@@ -312,8 +312,8 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   assert.equal(buildGroups(cur, [], "2026-10-30", T0).find(g => g.posts[0].id === "x1").metrics.likes, 50);
 }
 
-// A reposter sharing a famous project's own repo keeps the repo (linked, installable), with its
-// stars not counted; a famous repo that isn't the project (Linux behind "Ginux") is dropped
+// A reposter sharing a famous project's own repo keeps the repo, and its stars count (the repo
+// is the project); a famous repo that isn't the project (Linux behind "Ginux") is dropped
 {
   const famous = (id, project, repo) => {
     const e = { ...mkp(id, project, 40, repo), author: { username: "reposter", followers: 10 }, author_built_it: false };
@@ -323,7 +323,11 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   };
   const vb = buildGroups([famous("v1", "Voicebox", "jamiepine/voicebox")], [], "2026-10-30", T0)[0];
   assert.equal(vb.repo, "jamiepine/voicebox", "the project's own repo stays on its card");
-  assert.equal(vb.reception.repo_counted, false, "its stars still don't count: the poster isn't its maker");
+  assert.equal(vb.reception.repo_counted, true, "its stars count: the repo is the project itself");
+  assert.ok(["proven", "well-received"].includes(vb.reception.verdict), "25k stars make it proven or loved");
+  const xl = famous("v3", "Excel", "someone/excel");
+  xl.original_clean = "Microsoft Excel"; xl.original = "Excel";
+  assert.equal(score(xl, T0).repo_counted, false, "a project named after the app it clones doesn't count as the repo's own");
   const gx = buildGroups([famous("v2", "Ginux", "torvalds/linux")], [], "2026-10-30", T0)[0];
   assert.equal(gx.repo, null, "an unrelated famous repo is dropped");
   assert.equal(gx.foreign_repo, "torvalds/linux");

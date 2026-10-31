@@ -8,7 +8,7 @@
 // ("PhotoCraft, VectorCraft, FilmCraft"), extensions of its name ("ArtCraft Launcher"), and
 // lone posts about one of its apps ("EffectCraft"). Remaining stray posts without a repo join
 // an existing project they lead with ("PhotoCraft web version", "PhotoCraft, VectorCraft…").
-import { score, FAMOUS } from "./reception.js";
+import { score, FAMOUS, repoIsProject } from "./reception.js";
 
 const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const GENERIC = /clone|alternative|copy|replacement|version|untitled/;
@@ -21,14 +21,6 @@ const mode = list => {
 
 // Version numbers and stage words don't make a different project: "Open Duet 2.0" is "Open-Duet"
 const baseName = s => String(s || "").replace(/\b(v(er(sion)?)?\s*)?\d+(\.\d+)*\b/gi, " ").replace(/\b(beta|alpha|preview|release|rc)\b/gi, " ");
-
-// Whether a post's linked repo is the project the post is about: the repo's name and the
-// project's name match ("Voicebox" and jamiepine/voicebox, "open-notebook" and lfnovo/open-notebook)
-export function repoIsProject(e) {
-  const repo = norm(baseName(String(e.repo || e.github?.repo || "").split("/")[1]));
-  const names = [e.project, e.display_name].map(n => norm(baseName(n))).filter(n => n.length >= 3);
-  return repo.length >= 3 && names.some(n => n === repo || (Math.min(n.length, repo.length) >= 5 && (n.includes(repo) || repo.includes(n))));
-}
 
 export function nameKey(e) {
   const n = norm(baseName(e.project || e.display_name));
