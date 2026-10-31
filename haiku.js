@@ -15,9 +15,9 @@ export const SERIOUS_FLAGS = new Set(["scam-or-malware", "stolen-code", "securit
 
 const TRIAGE_SYSTEM = `You classify posts from X (Twitter) for a catalog of software clones.
 A post qualifies when its author announces or shows a project that recreates existing software:
-- clone: a copy or open-source alternative of an existing product
-- reverse-engineered: rebuilt by studying how the original works (protocols, file formats, binaries)
-- reimagined: a new take on an existing product, keeping its core idea
+- clone: a copy or open-source alternative of an existing product, including vibe-coded functional copies of popular apps
+- reverse-engineered: rebuilt by studying how the original works (protocols, file formats, binaries), including clean-room or white-room rebuilds
+- reimagined: a new take on an existing product, keeping its core idea, including tributes and homages
 - port: the same software moved to another language or platform
 Use not-a-clone for everything else: news, opinions, jobs, ads, threads about the original product,
 people merely asking for an alternative, or reposts of someone else's project with no added information.

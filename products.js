@@ -117,7 +117,7 @@ export function detectProduct(description, readme) {
 
 // X search query for one product, for rotating discovery. Names that need their vendor
 // to match ("Microsoft Word") are searched with it.
-const CLONE_WORDS = '(clone OR "open source alternative" OR rebuilt OR recreated OR reimplementation OR "reverse engineered" OR "built my own")';
+const CLONE_WORDS = '(clone OR "open source alternative" OR rebuilt OR recreated OR recreation OR reimplementation OR "reverse engineered" OR "reverse engineer" OR "clean room" OR "white room" OR tribute OR "functional copy" OR "vibe coded" OR "built my own")';
 const TERMS = PRODUCTS.map(([name, vendor, alias, search]) => search || (new RegExp(`^(?:${alias})$`, "i").test(name) ? name : `${vendor} ${name}`));
 export const PRODUCT_QUERIES = PRODUCTS.map(([name], i) => ({ product: name, q: `"${TERMS[i]}" ${CLONE_WORDS} has:links -is:retweet -is:reply` }));
 

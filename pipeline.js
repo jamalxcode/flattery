@@ -15,8 +15,11 @@ import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
 import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
-const CLONE_WORDS = '(clone OR reimplementation OR "reverse engineered" OR "open source alternative" OR rebuilt OR recreated OR "from scratch")';
+const CLONE_WORDS = '(clone OR reimplementation OR "reverse engineered" OR "reverse engineer" OR "open source alternative" OR rebuilt OR recreated OR recreation OR "from scratch" OR tribute)';
 export const GENERIC_QUERIES = [
+  // Vibe-coded functional copies, tributes and white-room rebuilds of popular apps
+  `("white room" OR "clean room" OR "reverse engineer" OR tribute OR homage OR "functional copy" OR "1:1 copy" OR "pixel perfect" OR recreation) (app OR clone OR "open source" OR github) has:links -is:retweet -is:reply`,
+  `("vibe coded" OR "vibecoded" OR "vibe-coded") (clone OR copy OR "my own" OR rebuilt OR recreated OR tribute OR version) has:links -is:retweet -is:reply`,
   `url:github.com ${CLONE_WORDS} -is:retweet -is:reply`,
   `url:github.com ("I built" OR "I made" OR "we built") (clone OR alternative OR replacement) -is:retweet -is:reply`,
   `("reverse engineered" OR "clean-room" OR "clean room") (open source OR github) has:links -is:retweet -is:reply`,
