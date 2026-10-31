@@ -10,6 +10,7 @@ import { run } from "../pipeline.js";
 import { repoStats, pickReadmeImage } from "../github.js";
 import { reportHtml } from "../report.js";
 import { score } from "../reception.js";
+import { buildGroups } from "../groups.js";
 
 const { values: a } = parseArgs({ options: { html: { type: "string" } } });
 const H = 36e5, T0 = Date.parse("2026-10-30T12:00:00Z");
@@ -175,6 +176,22 @@ const x5 = new X("token", log, { maxReads: 3000 });
 const r5 = await run(r1, { perQuery: 50, productsPerRun: 0, search: ["Webshop"] }, { x: x5, haiku, githubStats, log, now: T0 + 48 * H });
 assert.ok(reads.some(r => r.includes('"Webshop" -is:retweet')), "the name is searched");
 assert.ok(by(r5, "p1").found_by.includes("search: Webshop"));
+
+// Posts about the same project merge: same name across posts, and a name joins its repo
+const mkp = (id, project, likes, repo) => ({ id, project, repo, status: "ok", url: "u" + id, created_at: new Date(T0 - 50 * H).toISOString(),
+  author: { username: "a" + id, followers: 10 }, metrics: { likes, reposts: 0, replies: 0, quotes: 0, bookmarks: 0, views: 0 }, found_by: [],
+  github: repo ? { status: "ok", repo, created: "2026-10-01", stars: 5000, downloads: 0, stars_history: [] } : undefined });
+const gposts = [mkp("g1", "ArtCraft", 100), mkp("g2", "Artcraft", 30), mkp("g3", "PhotoCraft", 5), mkp("g4", "photocraft", 2, "storytold/photocraft"),
+  mkp("g5", "Discord clone", 50), mkp("g6", "Discord clone", 40)];
+for (const e of gposts) e.reception = score(e, T0);
+const gs = buildGroups(gposts, [], "2026-10-30", T0);
+const gby = name => gs.find(g => g.posts.some(p => p.id === name));
+assert.equal(gby("g1").posts.length, 2, "ArtCraft posts merge");
+assert.equal(gby("g1").metrics.likes, 130, "their likes add up");
+assert.equal(gby("g3"), gby("g4"), "a name joins the repo of the same name");
+assert.equal(gby("g3").repo, "storytold/photocraft");
+assert.notEqual(gby("g5"), gby("g6"), "generic names never merge");
+assert.ok(r1.groups.length >= 1 && r1.groups.every(g => g.reception && g.history.length));
 
 console.log(`ok: ${r1.results.length} posts, ${firstReads} + ${x2.reads} X reads`);
 for (const e of r2.results) console.log(`  ${String(e.reception.score).padStart(3)} ${e.reception.verdict.padEnd(13)} ${e.id} ${JSON.stringify(e.reception.parts)} ${e.reception.reasons.join("; ")}`);

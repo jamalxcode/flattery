@@ -1,0 +1,97 @@
+// Merges posts about the same project into one catalog entry ("group"), so a project that
+// many people posted about (ArtCraft: dozens of reviews in several languages) gets one card
+// with everyone's reactions added up. Posts join a group when they link the same repo, or
+// name the same specific project; a name also joins the repo of the same name
+// ("PhotoCraft" ↔ storytold/photocraft). Generic names ("Discord clone") never merge.
+import { score } from "./reception.js";
+
+const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const GENERIC = /clone|alternative|copy|replacement|version|untitled/;
+
+export function nameKey(e) {
+  const n = norm(e.project);
+  if (n.length < 5 || GENERIC.test(n) || n === norm(e.original) || n === norm(e.product?.name)) return null;
+  return n;
+}
+
+// posts: per-post entries, already scored. prevGroups: last run's groups, for history.
+export function buildGroups(posts, prevGroups = [], today = new Date().toISOString().slice(0, 10), now = Date.now()) {
+  // Union-find over post ids
+  const parent = new Map(posts.map(e => [e.id, e.id]));
+  const find = id => { while (parent.get(id) !== id) { parent.set(id, parent.get(parent.get(id))); id = parent.get(id); } return id; };
+  const join = (a, b) => { a = find(a); b = find(b); if (a !== b) parent.set(b, a); };
+  const byKey = new Map();
+  const link = (key, id) => byKey.has(key) ? join(byKey.get(key), id) : byKey.set(key, id);
+  for (const e of posts) {
+    const repo = e.repo?.toLowerCase();
+    if (repo) {
+      link("repo:" + repo, e.id);
+      const rn = norm(repo.split("/")[1]);
+      if (rn.length >= 5 && !GENERIC.test(rn)) link("name:" + rn, e.id);
+    }
+    const n = nameKey(e);
+    if (n) link("name:" + n, e.id);
+  }
+
+  const members = new Map();
+  for (const e of posts) {
+    const r = find(e.id);
+    if (!members.has(r)) members.set(r, []);
+    members.get(r).push(e);
+  }
+
+  const prev = new Map(prevGroups.map(g => [g.id, g]));
+  const groups = [];
+  for (const list of members.values()) {
+    const live = list.filter(e => e.status !== "gone");
+    const pool = live.length ? live : list;
+    const lead = [...pool].sort((a, b) => b.metrics.likes - a.metrics.likes)[0];
+    // The poster's own repo, if any post has one; the most starred wins
+    const own = pool.filter(e => e.github && e.github.status !== "gone" && e.reception?.repo_counted)
+      .sort((a, b) => b.github.stars - a.github.stars)[0];
+    const anyRepo = own || pool.find(e => e.repo);
+    const sum = k => pool.reduce((s, e) => s + (e.metrics[k] || 0), 0);
+    const sentiments = pool.map(e => e.sentiment).filter(s => s?.sampled);
+    const names = new Map();
+    for (const e of pool) if (e.project) names.set(e.project, (names.get(e.project) || 0) + e.metrics.likes + 1);
+    const project = [...names].sort((a, b) => b[1] - a[1])[0]?.[0] || lead.project;
+    const key = anyRepo?.repo ? "repo:" + anyRepo.repo.toLowerCase() : nameKey(lead) ? "name:" + nameKey(lead) : "post:" + lead.id;
+    const id = list.length > 1 ? key : lead.id;
+    const g = {
+      ...lead,
+      id,
+      group: list.length > 1,
+      project,
+      status: live.length ? "ok" : "gone",
+      created_at: pool.map(e => e.created_at).sort()[0],
+      metrics: { likes: sum("likes"), reposts: sum("reposts"), replies: sum("replies"), quotes: sum("quotes"), bookmarks: sum("bookmarks"), views: sum("views") },
+      repo: anyRepo?.repo || null,
+      github: anyRepo?.github,
+      repo_owned: own ? true : undefined,
+      sentiment: sentiments.length ? {
+        positive: sentiments.reduce((s, x) => s + x.positive, 0),
+        neutral: sentiments.reduce((s, x) => s + x.neutral, 0),
+        negative: sentiments.reduce((s, x) => s + x.negative, 0),
+        sampled: sentiments.reduce((s, x) => s + x.sampled, 0),
+        flags: [...new Set(sentiments.flatMap(x => x.flags || []))],
+        summary: [...sentiments].sort((a, b) => b.sampled - a.sampled)[0].summary,
+      } : undefined,
+      found_by: [...new Set(list.flatMap(e => e.found_by || []))],
+      first_seen: list.map(e => e.first_seen).filter(Boolean).sort()[0],
+      posts: [...list].sort((a, b) => b.metrics.likes - a.metrics.likes).map(e => ({
+        id: e.id, url: e.url, author: e.author?.username, likes: e.metrics.likes, created_at: e.created_at,
+        text: (e.text || "").slice(0, 160), status: e.status, verdict: e.reception?.verdict,
+      })),
+    };
+    delete g.history;
+    g.reception = score(g, now);
+    const h = [...(prev.get(id)?.history || (list.length === 1 ? lead.history : null) || [])];
+    if (h.at(-1)?.verdict !== g.reception.verdict) {
+      h.push({ at: today, verdict: g.reception.verdict, score: g.reception.score });
+      if (h.length > 20) h.splice(0, h.length - 20);
+    }
+    g.history = h;
+    groups.push(g);
+  }
+  return groups.sort((a, b) => b.reception.score - a.reception.score || b.metrics.likes - a.metrics.likes);
+}

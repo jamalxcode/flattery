@@ -36,6 +36,7 @@ export const reached = m => m.likes >= MIN_REACH.likes || m.reposts >= MIN_REACH
 export const NEW_REPO_DAYS = 120;
 const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 export function ownsRepo(entry, gh = entry.github) {
+  if (entry.repo_owned) return true; // a merged entry whose repo belongs to one of its posters
   const rawOwner = (gh?.repo || entry.repo || "").split("/")[0];
   const owner = norm(rawOwner);
   if (!owner) return false;

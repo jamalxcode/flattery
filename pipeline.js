@@ -11,8 +11,10 @@
 //                re-read when replies have grown, while X's 7-day search still covers them
 //   5. confirm   stars, downloads and star growth of each linked GitHub repo
 //   6. score     reception score and verdict (reception.js)
+//   7. group     posts about the same project merged into one entry (groups.js)
 import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
+import { buildGroups } from "./groups.js";
 import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
 const CLONE_WORDS = '(clone OR reimplementation OR "reverse engineered" OR "reverse engineer" OR "open source alternative" OR rebuilt OR recreated OR recreation OR "from scratch" OR tribute)';
@@ -261,22 +263,24 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
 
   // 6. Score
   // and keep each change of rating, so the page can show what was promoted or demoted
-  let changed = 0;
   for (const e of catalog.values()) {
     e.reception = score(e, now);
     const h = e.history ||= [];
     if (h.at(-1)?.verdict !== e.reception.verdict) {
-      if (h.length) changed++;
       h.push({ at: today, verdict: e.reception.verdict, score: e.reception.score });
       if (h.length > 20) h.splice(0, h.length - 20);
     }
   }
-  counts.changed = changed;
-  if (changed) log(`ratings: ${changed} changed`);
 
   const results = [...catalog.values()].sort((a, b) => b.reception.score - a.reception.score || b.metrics.likes - a.metrics.likes);
+  // 7. Merge posts about the same project into one entry each; these are what the page shows
+  const groups = buildGroups(results, fromX ? prev.groups || [] : [], today, now);
+  counts.changed = groups.filter(g => g.history.length > 1 && g.history.at(-1).at === today).length;
+  if (counts.changed) log(`ratings: ${counts.changed} projects changed`);
+  log(`groups: ${results.length} posts about ${groups.length} projects`);
   return {
     results,
+    groups,
     info: {
       source: "x",
       since_ids: sinceIds,
