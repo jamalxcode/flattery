@@ -19,6 +19,8 @@ themeBtn.addEventListener("click", () => {
 });
 
 // Surprise me: a random loved clone, or any rated one when none are loved yet
+$("news-btn").addEventListener("click", () => $("live").flattery?.news());
+
 $("surprise").addEventListener("click", () => {
   if (!live) return;
   const ok = (live.groups || live.results).filter(e => e.status !== "gone");
@@ -30,9 +32,10 @@ $("surprise").addEventListener("click", () => {
 // A shared link (#p=<id>) opens that project once the catalog has loaded
 let hashOpened = false;
 function openFromHash() {
-  if (location.hash.startsWith("#news")) return document.getElementById("news")?.scrollIntoView();
+  if (location.hash.startsWith("#news")) return $("live").flattery?.news();
   const m = location.hash.match(/^#p=(.+)$/);
   // A project page (/p/<code>/) names its project in window.FLATTERY_OPEN
+  if (!m && window.FLATTERY_PRODUCT && !hashOpened) { hashOpened = true; return $("live").flattery?.pick(window.FLATTERY_PRODUCT); }
   const id = m ? decodeURIComponent(m[1]) : window.FLATTERY_OPEN;
   if (!id || hashOpened) return;
   hashOpened = true;
@@ -62,6 +65,11 @@ async function loadLive() {
     if (!live || data.info.generated_iso !== live.info.generated_iso) {
       live = data;
       renderReport($("live"), live.groups || live.results, live.info, { search: $("search"), base: "data/" });
+      $("news-btn").hidden = !(live.info.newsletter || []).length;
+      $("news-btn").classList.toggle("fresh", !!$("live").dataset.newsFresh);
+      // ?q=… (e.g. from the stats page's builder links) starts with that search
+      const q = new URLSearchParams(location.search).get("q");
+      if (q && !$("search").value) { $("search").value = q; $("search").dispatchEvent(new Event("input")); }
       openFromHash();
     }
     liveStatus();

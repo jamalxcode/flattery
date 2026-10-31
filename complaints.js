@@ -58,3 +58,29 @@ export function tally(objections) {
   }
   return out;
 }
+
+// "I tried it": posts tagged #FlatteryWorks or #FlatteryBroken with a card's code. One vote per
+// established account per project (its latest), same age and follower rules as objections.
+export const WORKS_TAG = "FlatteryWorks", BROKEN_TAG = "FlatteryBroken";
+
+export function parseTrial(text) {
+  const m = String(text).match(new RegExp(`#(${WORKS_TAG}|${BROKEN_TAG})\\W+(fr[0-9a-z]{5})\\b`, "i"));
+  return m ? { works: m[1].toLowerCase() === WORKS_TAG.toLowerCase(), code: m[2].toLowerCase() } : null;
+}
+
+// trials: [{ code, author_id, account_created, followers, at, works }] -> Map code -> { works, broken }
+export function tallyTrials(trials) {
+  const latest = new Map();
+  for (const t of [...trials].sort((a, b) => a.at.localeCompare(b.at))) {
+    const ageDays = (Date.parse(t.at) - Date.parse(t.account_created || t.at)) / 864e5;
+    if (ageDays < MIN_AGE_DAYS || (t.followers || 0) < MIN_FOLLOWERS) continue;
+    latest.set(`${t.code} ${t.author_id}`, t);
+  }
+  const out = new Map();
+  for (const t of latest.values()) {
+    const c = out.get(t.code) || { works: 0, broken: 0 };
+    t.works ? c.works++ : c.broken++;
+    out.set(t.code, c);
+  }
+  return out;
+}

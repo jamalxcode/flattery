@@ -73,12 +73,54 @@ for (const g of live) {
   await writeFile(`${a.out}/p/${g.code}/index.html`, html);
 }
 
+// "Free alternatives to X": a page per original app, the app filtered to its clones
+const slug = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const byApp = new Map();
+for (const g of live) {
+  const w = what(g);
+  if (!w || !slug(w) || ["faded"].includes(g.reception.verdict)) continue;
+  if (!byApp.has(w)) byApp.set(w, []);
+  byApp.get(w).push(g);
+}
+// Only apps with 2+ clones, or a well-known product with one: no thin one-line pages
+for (const [app, list] of byApp) if (list.length < 2 && !list.some(g => g.product)) byApp.delete(app);
+await rm(`${a.out}/alternatives`, { recursive: true, force: true });
+for (const [app, list] of byApp) {
+  const best = [...list].sort((x, y) => y.reception.score - x.reception.score).slice(0, 3).map(name);
+  let html = withMeta(index, {
+    title: `Free ${app} alternatives, rated by the crowd | Flattery`,
+    description: `${list.length} free ${list.length === 1 ? "clone" : "clones and alternatives"} of ${app}, found on X and checked on GitHub: ${best.join(", ")}. Imitation is the sincerest form of flattery.`,
+    url: `${SITE}alternatives/${slug(app)}/`, image: `${SITE}data/og/home.png`,
+  });
+  html = html.replace(/<meta charset="utf-8">/, `<meta charset="utf-8">\n<base href="/">`);
+  html = html.replace('<div id="live"></div>', `<div id="live"><article class="static-card"><h1>Free ${esc(app)} alternatives</h1>
+    <ul>${list.map(g => `<li><a href="p/${g.code}/">${esc(name(g))}</a>: ${(LABEL[g.reception.verdict] || LABEL.mixed).join(" ")}. ${esc(g.summary || "")}</li>`).join("")}</ul></article></div>`);
+  html = html.replace('<script src="render.js', `<script>window.FLATTERY_PRODUCT = ${JSON.stringify(app).replace(/</g, "\\u003c")};</script>\n<script src="render.js`);
+  await mkdir(`${a.out}/alternatives/${slug(app)}`, { recursive: true });
+  await writeFile(`${a.out}/alternatives/${slug(app)}/index.html`, html);
+}
+// The index of all of them
+{
+  const apps = [...byApp].sort((x, y) => y[1].length - x[1].length || x[0].localeCompare(y[0]));
+  let html = withMeta(index, { title: "Free alternatives to paid apps, rated by the crowd | Flattery",
+    description: `Free clones and alternatives to ${apps.length} paid apps, from Photoshop to Word, found on X and checked on GitHub.`,
+    url: `${SITE}alternatives/`, image: `${SITE}data/og/home.png` });
+  html = html.replace(/<meta charset="utf-8">/, `<meta charset="utf-8">\n<base href="/">`);
+  html = html.replace('<div id="live"></div>', `<div id="live"><article class="static-card"><h1>Free alternatives to paid apps</h1>
+    <ul class="alt-index">${apps.map(([app, list]) => `<li><a href="alternatives/${slug(app)}/">${esc(app)}</a> <span>${list.length}</span></li>`).join("")}</ul></article></div>`);
+  // This page stays a plain list: the app would replace it
+  html = html.replace(/<script type="module" src="app\.js[^"]*"><\/script>/, "");
+  await writeFile(`${a.out}/alternatives/index.html`, html);
+}
+
 const day = (info.generated_iso || new Date().toISOString()).slice(0, 10);
 await writeFile(`${a.out}/sitemap.xml`, `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 <url><loc>${SITE}</loc><lastmod>${day}</lastmod><changefreq>daily</changefreq></url>
 ${live.map(g => `<url><loc>${SITE}p/${g.code}/</loc><lastmod>${(g.history?.at(-1)?.at || day)}</lastmod></url>`).join("\n")}
+<url><loc>${SITE}alternatives/</loc><lastmod>${day}</lastmod></url>
+${[...byApp.keys()].map(app => `<url><loc>${SITE}alternatives/${slug(app)}/</loc><lastmod>${day}</lastmod></url>`).join("\n")}
 </urlset>
 `);
 await writeFile(`${a.out}/robots.txt`, `User-agent: *\nAllow: /\nSitemap: ${SITE}sitemap.xml\n`);
-console.log(`pages: ${live.length} project pages, sitemap.xml and robots.txt written`);
+console.log(`pages: ${live.length} project pages, ${byApp.size} alternatives pages, sitemap.xml and robots.txt written`);

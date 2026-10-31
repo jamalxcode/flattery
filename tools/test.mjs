@@ -84,6 +84,7 @@ globalThis.fetch = async url => {
 const haiku = {
   async classify(list) { return new Map(list.map(e => [e.id, { category: "Design", original_clean: e.original || "" }])); },
   async match(list) { return new Map(list.map(e => [e.id, ""])); },
+  async review(list) { return new Map(list.map(f => [f.id, { agree: f.rating !== "Don't touch", note: "checked" }])); },
   async name(list) { return new Map(list.map(e => [e.id, "Named " + e.id])); },
   async complaints(list) { return new Map(list.map(c => [c.id, !/spam/.test(c.text)])); },
   async newsletter(facts) { return { title: "Week", intro: "Intro", items: facts.items.slice(0, 2).map(i => ({ id: i.id, blurb: "b" })), outro: "Bye" }; },
@@ -292,6 +293,36 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   const before = reads.length;
   await run(old, { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, { x: new X("token", log, { maxReads: 3000 }), haiku, githubStats, log, now: T0 + 2 * H });
   assert.ok(reads.slice(before).some(r => r.includes("conversation_id:p1")), "the flagged post's replies are read again");
+}
+
+// The second opinion can overrule a Don't touch verdict, and it's remembered
+{
+  const g3 = r1.groups.find(g => g.posts.some(p => p.id === "p3"));
+  assert.equal(g3.reception.verdict, "mixed", "the reviewer disagreed with Don't touch");
+  assert.ok(g3.second_opinion && !g3.second_opinion.agree);
+  assert.ok(Object.keys(r1.info.second_opinions).some(k => k.endsWith("|stay-away")));
+}
+
+// Hacker News / Reddit posts go through the same triage and get their comments read
+{
+  const hn = { id: "hn:42", conversation_id: "hn:42", source: "hn", url: "https://news.ycombinator.com/item?id=42", text: "Show HN: I rebuilt Figma in Rust",
+    created_at: new Date(T0 - 30 * H).toISOString(), lang: "en", author: { id: "hn:pg", username: "pg", followers: 0 },
+    metrics: { likes: 300, reposts: 0, replies: 80, quotes: 0, bookmarks: 0, views: 0 }, urls: [], repos: [], is_reply_or_repost: false };
+  const asked = [];
+  const sources = {
+    async search() { return [hn]; },
+    async refresh(list) { asked.push(...list.map(e => e.id)); return new Map(); },
+    async comments() { return Array.from({ length: 6 }, (_, i) => ({ text: "amazing", kind: "reply", author: "u" + i, url: "c" + i })); },
+  };
+  const r9 = await run(r1, { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, { x: new X("token", log, { maxReads: 3000 }), haiku, githubStats, sources, log, now: T0 + 2 * H });
+  const e = r9.results.find(e => e.id === "hn:42");
+  assert.ok(e, "the Hacker News post is in the catalog");
+  assert.equal(e.url, "https://news.ycombinator.com/item?id=42");
+  assert.equal(e.sentiment.sampled, 6, "its comments were read");
+  const r10 = await run(r9, { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, { x: new X("token", log, { maxReads: 3000 }), haiku, githubStats, sources, log, now: T0 + 4 * H });
+  assert.ok(asked.includes("hn:42"), "known Hacker News posts are refreshed through their own API");
+  assert.ok(!reads.some(r => r.includes("hn%3A42") || r.includes("hn:42")), "and never through X");
+  assert.ok(r10.results.find(e => e.id === "hn:42"));
 }
 
 console.log(`ok: ${r1.results.length} posts, ${firstReads} + ${x2.reads} X reads`);

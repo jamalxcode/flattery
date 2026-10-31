@@ -120,7 +120,13 @@ jobs:
       # New file names each deploy, so browsers never keep running an old script
       - run: sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" index.html
       # A page per project (p/<code>/) with its own title and preview, plus sitemap.xml
-      - run: '[ -s data/latest.json ] && node tools/pages.mjs --data data/latest.json --out . || echo "no catalog, no project pages"' 
+      # and the "Free alternatives to X" pages and the stats page
+      - name: Write project, alternatives and stats pages
+        run: |
+          if [ -s data/latest.json ]; then
+            node tools/pages.mjs --data data/latest.json --out .
+            node tools/stats.mjs --data data/latest.json --out .
+          else echo "no catalog yet"; fi
       - uses: actions/upload-pages-artifact@v4
         with: { path: . }
       - id: deployment
