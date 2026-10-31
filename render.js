@@ -372,12 +372,15 @@ function renderReport(root, DATA, INFO, opts = {}) {
   // Newsletter: the latest issue, then the archive
   // Haiku sometimes repeats the newsletter's name in the title
   const issues = (INFO.newsletter || []).map(n => ({ ...n, title: String(n.title || "").replace(/^this week in clones\s*[:–-]\s*/i, "") }));
+  // Anyone can post an issue from their own X account, with its top picks and a link back
+  const issueShare = n => `<a class="xshare" href="${esc(xIntent(`📰 This week in clones: ${n.title}\n\n${n.items.slice(0, 3).map(i => `${rating(i.verdict)[1]} ${i.name}`).join("\n")}\n\nRated by the crowd on Flattery:`, SITE + "#news"))}" target="_blank" rel="noopener" data-goat="share-newsletter">Share this issue on X</a>`;
   const issueHtml = (n, latest) => `<div class="issue">
+      ${latest ? `<div class="issue-share">${issueShare(n)}</div>` : ""}
       <p class="issue-date">${latest ? "📰 This week in clones · " : ""}${esc(new Date(n.date + "T12:00:00Z").toLocaleDateString("en", { day: "numeric", month: "long", year: "numeric" }))}</p>
       <h${latest ? 2 : 3}>${esc(n.title)}</h${latest ? 2 : 3}><p>${esc(n.intro)}</p>
       <ul>${n.items.map(i => `<li><button type="button" data-open="${esc(i.id)}">${rating(i.verdict)[1]} <b>${esc(i.name)}</b></button> ${esc(i.blurb)}</li>`).join("")}</ul>
       <p>${esc(n.outro)}</p>
-      <a class="xshare" href="${esc(xIntent(`📰 This week in clones: ${n.title}`, SITE + "#news=" + n.date))}" target="_blank" rel="noopener">Share on X</a></div>`;
+      ${issueShare(n)}</div>`;
   // The newsletter lives in a drawer, so it never pushes the cards down
   const fresh = issues[0] && Date.now() - Date.parse(issues[0].date + "T12:00:00Z") < 7 * 864e5;
   $("newsDrawer").innerHTML = issues.length ? `<button type="button" class="close" aria-label="Close">×</button>` + issueHtml(issues[0], true) + (issues.length > 1
@@ -449,6 +452,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
             <a${get || (e.repo && cls !== "danger") ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener" data-goat="post">The post on ${src(e)}</a>
             ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow" data-goat="github">☠️ Repo (don't run it)</a>` : ""}
             <a href="${esc(pageUrl(e))}" data-share="${esc(e.id)}" data-url="${esc(pageUrl(e))}" data-goat="copy-link" onclick="event.preventDefault()">Copy link</a>
+            ${cls !== "danger" ? `<a class="xshare fav" href="${esc(xIntent(`❤️ My favourite ${what(e) ? `free take on ${what(e)}` : "clone"}: ${name(e)}${e.summary ? `\n\n${e.summary}` : ""}\n\nRated ${emo} ${rname} by the crowd on Flattery:`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="share-favourite">❤️ Share as my favourite</a>` : ""}
             <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="share-x">Share on X</a>
           </div>
           <div class="verdict"><span class="emo">${emo}</span><span><b>${rname}</b><small>${rdesc}</small></span>

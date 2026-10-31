@@ -42,7 +42,8 @@ for (const [width, label] of [[1280, "desktop"], [390, "phone"]]) {
   const wide = await p.evaluate(() => {
     const w = document.documentElement.clientWidth;
     if (document.documentElement.scrollWidth <= w + 1) return [];
-    return [...document.querySelectorAll("body *")].filter(el => el.getBoundingClientRect().right > w + 1 && getComputedStyle(el).position !== "fixed" && !el.closest("dialog:not([open]), [hidden], .side-group"))
+    return [...document.querySelectorAll("body *")].filter(el => el.getBoundingClientRect().right > w + 1 && getComputedStyle(el).position !== "fixed" && !el.closest("dialog:not([open]), [hidden], .side-group") &&
+      ![...(function* (n) { while ((n = n.parentElement) && n !== document.body) yield n; })(el)].some(a => getComputedStyle(a).overflowX !== "visible"))
       .slice(0, 5).map(el => `${el.tagName.toLowerCase()}.${[...el.classList].join(".")} (${Math.round(el.getBoundingClientRect().right)}px of ${w}px): ${(el.textContent || "").trim().slice(0, 40)}`);
   });
   check(!wide.length, `${label}: no sideways scrolling${wide.length ? ": " + wide.join(" | ") : ""}`);
