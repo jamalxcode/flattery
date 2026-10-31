@@ -38,9 +38,14 @@ function renderReport(root, DATA, INFO, opts = {}) {
   };
   const search = opts.search || null;
 
+  // A README screenshot when the repo has one, over a generated tile (shown if it fails to load).
+  // Long names get a smaller size and may wrap to two lines instead of being cut off.
   const art = e => {
     const n = name(e);
-    return `<div class="tile" style="--h:${hue(n)}"><span class="tile-mark">${esc(n)}</span>${what(e) ? `<span class="tile-of">≈ ${esc(what(e))}</span>` : ""}</div>`;
+    const size = n.length <= 9 ? "l" : n.length <= 16 ? "m" : "s";
+    const shot = e.github?.image && e.github.status !== "gone"
+      ? `<img src="${esc(e.github.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+    return `<div class="tile" style="--h:${hue(n)}"><span class="tile-mark ${size}">${esc(n)}</span>${what(e) ? `<span class="tile-of">≈ ${esc(what(e))}</span>` : ""}</div>${shot}`;
   };
   const mini = s => {
     if (!s?.sampled) return "";

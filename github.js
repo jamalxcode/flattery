@@ -64,3 +64,40 @@ export async function repoStats(token, names, log) {
   }
   return out;
 }
+
+// A screenshot for the card: the first real image in the repo's README. Badges, logos,
+// icons, avatars and SVGs are skipped; relative paths point at the repo's files.
+const SKIP_IMAGE = /shields\.io|badge|badgen|dcbadge|trendshift|codecov|travis-ci|circleci|\/workflows\/|buymeacoffee|ko-fi|star-history|contrib\.rocks|vercel\.com\/button|deploy|avatars?\b|\/logo|logo[\w-]*\.|icon[\w-]*\.|\.svg(\?|$)|^https?:\/\/github\.com\/[\w-]+\.png/i;
+
+export function pickReadmeImage(md, repo) {
+  const text = (md || "").replace(/&#x2F;/gi, "/").replace(/&amp;/g, "&");
+  const found = [];
+  for (const m of text.matchAll(/!\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)|<img\b[^>]*>/gi)) {
+    if (m[2]) { found.push({ alt: m[1], src: m[2] }); continue; }
+    const tag = m[0];
+    const src = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1];
+    const alt = tag.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1] || "";
+    const width = +(tag.match(/\bwidth\s*=\s*["']?(\d+)/i)?.[1] || 0);
+    if (src && !(width && width < 200)) found.push({ alt, src });
+  }
+  for (const { alt, src } of found) {
+    if (SKIP_IMAGE.test(src) || /\b(logo|icon|badge|avatar)\b/i.test(alt)) continue;
+    if (/^https?:\/\//i.test(src)) return src.replace(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/(.+)$/i, "https://raw.githubusercontent.com/$1/$2");
+    if (/^(data:|#|mailto:)/i.test(src)) continue;
+    return `https://raw.githubusercontent.com/${repo}/HEAD/${src.replace(/^\.?\//, "")}`;
+  }
+  return null;
+}
+
+// raw.githubusercontent.com isn't API rate limited. Returns the image URL, null when the
+// README has none, or undefined when the README couldn't be fetched (try again later).
+export async function readmeImage(repo) {
+  for (const name of ["README.md", "readme.md", "Readme.md", "README.MD"]) {
+    try {
+      const res = await fetch(`https://raw.githubusercontent.com/${repo}/HEAD/${name}`);
+      if (res.ok) return pickReadmeImage(await res.text(), repo);
+      if (res.status !== 404) return undefined;
+    } catch { return undefined; }
+  }
+  return null;
+}
