@@ -15,8 +15,11 @@ import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
 import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
-const CLONE_WORDS = '(clone OR reimplementation OR "reverse engineered" OR "open source alternative" OR rebuilt OR recreated OR "from scratch")';
+const CLONE_WORDS = '(clone OR reimplementation OR "reverse engineered" OR "reverse engineer" OR "open source alternative" OR rebuilt OR recreated OR recreation OR "from scratch" OR tribute)';
 export const GENERIC_QUERIES = [
+  // Vibe-coded functional copies, tributes and white-room rebuilds of popular apps
+  `("white room" OR "clean room" OR "reverse engineer" OR tribute OR homage OR "functional copy" OR "1:1 copy" OR "pixel perfect" OR recreation) (app OR clone OR "open source" OR github) has:links -is:retweet -is:reply`,
+  `("vibe coded" OR "vibecoded" OR "vibe-coded") (clone OR copy OR "my own" OR rebuilt OR recreated OR tribute OR version) has:links -is:retweet -is:reply`,
   `url:github.com ${CLONE_WORDS} -is:retweet -is:reply`,
   `url:github.com ("I built" OR "I made" OR "we built") (clone OR alternative OR replacement) -is:retweet -is:reply`,
   `("reverse engineered" OR "clean-room" OR "clean room") (open source OR github) has:links -is:retweet -is:reply`,
@@ -117,6 +120,33 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
         log(`backfill: ${posts.length} posts for ${q.slice(0, 80)}${q.length > 80 ? "…" : ""}`);
       }
       log(`backfill: ${kept} popular candidates from the last ${opts.backfillDays} days`);
+    }
+
+    // Named searches ("ArtCraft"): every original post about it from the last
+    // searchDays days, popular first, whatever its reach; triage still decides
+    for (const term of opts.search || []) {
+      if (outOfTime()) break;
+      const q = `"${term.replaceAll('"', "")}" -is:retweet -is:reply`;
+      let posts;
+      try {
+        ({ posts } = await x.search(q, { archive: canArchive, startTime: canArchive ? iso(now - (opts.searchDays ?? 21) * 864e5) : undefined, max: opts.searchMax ?? 100 }));
+      } catch (err) {
+        if (!(err instanceof ArchiveError)) throw err;
+        canArchive = false;
+        archiveState = { ok: false, checked: today };
+        ({ posts } = await x.search(q, { max: opts.searchMax ?? 100 }));
+      }
+      counts.searched++;
+      let kept = 0;
+      for (const p of posts) {
+        if (p.is_reply_or_repost) continue;
+        const known = catalog.get(p.id);
+        if (known) { known.found_by = [...new Set([...known.found_by, `search: ${term}`])]; continue; }
+        rejected.delete(p.id); // asked for by name: judge it again
+        if (!fresh.has(p.id)) { fresh.set(p.id, { ...p, found_by: [] }); kept++; }
+        fresh.get(p.id).found_by.push(`search: ${term}`);
+      }
+      log(`search for "${term}": ${posts.length} posts, ${kept} new candidates`);
     }
     counts.candidates = fresh.size;
 

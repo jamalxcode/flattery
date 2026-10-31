@@ -19,6 +19,8 @@ A GitHub Action runs `tools/scan.mjs` every 8 hours and publishes the catalog wi
 
 The catalog is saved to the `data` branch (`latest.json`, one commit per run) and every run starts from it. A run never starts from empty while a catalog is saved, and refuses to write one smaller than the last.
 
+**Search for a name:** **Run workflow** with `search` (e.g. `ArtCraft`, or several separated by commas) looks for every original post about it from the last 21 days, popular first, and rates the ones Haiku confirms as clones.
+
 **Backfill:** **Actions → Scan and deploy → Run workflow** with `backfill_days` (e.g. 21) and a higher `max_reads` (e.g. 3000) searches X's full archive for popular clones from those days. Reactions on threads older than 7 days are also re-read weekly through the archive when they've grown.
 
 There is no GitHub discovery: X finds the projects, GitHub only confirms them.
