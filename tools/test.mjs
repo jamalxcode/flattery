@@ -312,6 +312,23 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   assert.equal(buildGroups(cur, [], "2026-10-30", T0).find(g => g.posts[0].id === "x1").metrics.likes, 50);
 }
 
+// A reposter sharing a famous project's own repo keeps the repo (linked, installable), with its
+// stars not counted; a famous repo that isn't the project (Linux behind "Ginux") is dropped
+{
+  const famous = (id, project, repo) => {
+    const e = { ...mkp(id, project, 40, repo), author: { username: "reposter", followers: 10 }, author_built_it: false };
+    e.github = { ...e.github, stars: 25000, created: "2024-01-01" };
+    e.reception = score(e, T0);
+    return e;
+  };
+  const vb = buildGroups([famous("v1", "Voicebox", "jamiepine/voicebox")], [], "2026-10-30", T0)[0];
+  assert.equal(vb.repo, "jamiepine/voicebox", "the project's own repo stays on its card");
+  assert.equal(vb.reception.repo_counted, false, "its stars still don't count: the poster isn't its maker");
+  const gx = buildGroups([famous("v2", "Ginux", "torvalds/linux")], [], "2026-10-30", T0)[0];
+  assert.equal(gx.repo, null, "an unrelated famous repo is dropped");
+  assert.equal(gx.foreign_repo, "torvalds/linux");
+}
+
 // A serious flag judged under older rules is read again, even when replies haven't grown
 {
   const old = JSON.parse(JSON.stringify(r1));

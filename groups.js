@@ -22,6 +22,14 @@ const mode = list => {
 // Version numbers and stage words don't make a different project: "Open Duet 2.0" is "Open-Duet"
 const baseName = s => String(s || "").replace(/\b(v(er(sion)?)?\s*)?\d+(\.\d+)*\b/gi, " ").replace(/\b(beta|alpha|preview|release|rc)\b/gi, " ");
 
+// Whether a post's linked repo is the project the post is about: the repo's name and the
+// project's name match ("Voicebox" and jamiepine/voicebox, "open-notebook" and lfnovo/open-notebook)
+export function repoIsProject(e) {
+  const repo = norm(baseName(String(e.repo || e.github?.repo || "").split("/")[1]));
+  const names = [e.project, e.display_name].map(n => norm(baseName(n))).filter(n => n.length >= 3);
+  return repo.length >= 3 && names.some(n => n === repo || (Math.min(n.length, repo.length) >= 5 && (n.includes(repo) || repo.includes(n))));
+}
+
 export function nameKey(e) {
   const n = norm(baseName(e.project || e.display_name));
   if (n.length < 5 || GENERIC.test(n) || n === norm(e.original) || n === norm(e.product?.name)) return null;
@@ -35,8 +43,10 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
   const hidden = new Set(overrides.hide || []), separate = new Set(overrides.separate || []);
   posts = posts.filter(e => !hidden.has(e.id) && !removed.has(e.id))
     // A famous repo the poster doesn't own (Linux, Expo…) never becomes the card's subject:
-    // the post keeps its own project name without the repo, or leaves the page if it has none
-    .map(e => e.github && e.github.status !== "gone" && e.reception && !e.reception.repo_counted && e.github.stars >= FAMOUS
+    // the post keeps its own project name without the repo, or leaves the page if it has none.
+    // But when the repo is the project itself (a reposter sharing Voicebox's own repo), it stays:
+    // its stars still don't count toward the rating, but it's linked, installable and checked.
+    .map(e => e.github && e.github.status !== "gone" && e.reception && !e.reception.repo_counted && e.github.stars >= FAMOUS && !repoIsProject(e)
       ? { ...e, foreign_repo: e.repo, repo: null, github: undefined, repos: [] } : e)
     .filter(e => !e.foreign_repo || nameKey(e) || (e.project && !/\//.test(e.project)));
   // Curators: accounts that keep posting other people's projects (3+ posts not their own).
