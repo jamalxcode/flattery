@@ -1,5 +1,5 @@
 // Builds a standalone HTML report: the stylesheet and renderer inlined, with the data embedded.
-// Used by the page's "Download HTML report" and by the scheduled scan (tools/scan.mjs).
+// Used by the scheduled scan (tools/scan.mjs).
 export function reportHtml({ css, renderJs, noteHtml, results, info }) {
   const safe = v => JSON.stringify(v).replace(/</g, "\\u003c");
   return `<!doctype html>

@@ -1,18 +1,22 @@
-# Scans GitHub every 10 minutes and publishes the results with the site, so visitors
-# see the latest scan without a token. Each run builds on the previously published scan:
-# nothing found is dropped, every known repo gets a link check (deleted, renamed,
-# archived), and a repo is re-analysed at most every 6 hours and at most 20 per run,
-# which keeps this inside the Actions token's 1,000 requests an hour even when both
-# timers fire. One code-search query per run (rotating), no rate-limit wait over 30 s,
-# and a 5.5-minute budget keep the job well inside its 9-minute limit.
+# Scans X every 2 hours and publishes the catalog with the site. Each run builds on the
+# previously published catalog: nothing found is dropped, known posts get fresh metrics,
+# and linked GitHub repos are re-checked for stars and downloads.
 #
-# Timer: cron-job.org starts this through GitHub's API every 10 minutes (POST
+# X bills per post read, so --max-reads caps each run (600 posts × 12 runs a day). Raise or
+# lower it to fit the budget. A 6-minute budget keeps the job inside its 9-minute limit.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   X_BEARER_TOKEN     X API app bearer token
+#   ANTHROPIC_API_KEY  for Claude Haiku (triage and reply sentiment)
+# Without them the scan fails and the previous catalog is republished.
+#
+# Timer: cron-job.org can start this through GitHub's API (POST
 # /repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches), as for heat,
 # because GitHub's own schedule runs late or not at all. The schedule below is a backup.
 name: Scan and deploy
 on:
   push: { branches: [main] }
-  schedule: [{ cron: "3-59/10 * * * *" }]  # :03, :13, :23…, away from the top-of-hour rush
+  schedule: [{ cron: "17 */2 * * *" }]
   workflow_dispatch: {}
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: false }
@@ -24,20 +28,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
       - uses: actions/configure-pages@v5
         id: pages
-      - name: Fetch the previous scan
-        run: curl -fsSL "${{ steps.pages.outputs.base_url }}/data/latest.json" -o "$RUNNER_TEMP/prev.json" || echo "no previous scan"
-      - name: Scan GitHub
-        env: { GITHUB_TOKEN: "${{ github.token }}" }
+      - name: Fetch the previous catalog
+        run: curl -fsSL "${{ steps.pages.outputs.base_url }}/data/latest.json" -o "$RUNNER_TEMP/prev.json" || echo "no previous catalog"
+      - name: Scan X
+        env:
+          X_BEARER_TOKEN: "${{ secrets.X_BEARER_TOKEN }}"
+          ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}"
+          GITHUB_TOKEN: "${{ github.token }}"
         run: |
           mkdir -p data
-          if ! node tools/scan.mjs --max-repos 120 --max-fresh 20 --rotate --max-wait 30 --budget-sec 330 \
-               --cache "$RUNNER_TEMP/prev.json" --out data; then
-            echo "::warning::scan failed, republishing the previous scan"
+          if ! node tools/scan.mjs --max-reads 600 --rotate --budget-sec 360 --cache "$RUNNER_TEMP/prev.json" --out data; then
+            echo "::warning::scan failed, republishing the previous catalog"
             [ -s "$RUNNER_TEMP/prev.json" ] && cp "$RUNNER_TEMP/prev.json" data/latest.json
           fi
+      - run: rm -rf node_modules
       - uses: actions/upload-pages-artifact@v3
         with: { path: . }
       - id: deployment
