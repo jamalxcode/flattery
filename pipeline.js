@@ -15,7 +15,7 @@
 import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
 import { buildGroups } from "./groups.js";
-import { SENTIMENT_VERSION, SERIOUS_FLAGS } from "./haiku.js";
+import { SENTIMENT_VERSION, SERIOUS_FLAGS, REVIEW_VERSION } from "./haiku.js";
 import { TAG, postCode, parseCode, tally, WORKS_TAG, BROKEN_TAG, parseTrial, tallyTrials } from "./complaints.js";
 import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
@@ -520,17 +520,17 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
   }
   // Second opinion: a stronger model reviews each Loved and Don't touch verdict once (cached per
   // project and verdict). When it disagrees with good reason, the card shows Mixed with its note.
-  const opinions = fromX ? { ...(prev.info.second_opinions || {}) } : {};
+  const opinions = Object.fromEntries(Object.entries(fromX ? prev.info.second_opinions || {} : {}).filter(([, o]) => o.v === REVIEW_VERSION));
   const strong = g => ["well-received", "stay-away"].includes(g.reception.verdict);
   const facts = g => ({ id: g.id, name: g.project || g.display_name || g.repo, rating: g.reception.verdict === "stay-away" ? "Don't touch" : "Loved",
     clone_of: g.original_clean || g.original, summary: g.summary, score: g.reception.score, likes: g.metrics.likes, reposts: g.metrics.reposts,
-    replies: g.metrics.replies, posts: g.posts?.length, github: g.reception.repo_counted ? { stars: g.github?.stars, downloads: g.github?.downloads, status: g.github?.status } : null,
+    replies: g.metrics.replies, posts: g.posts?.length, github: g.reception.repo_counted ? { repo: g.repo, stars: g.github?.stars, downloads: g.github?.downloads, status: g.github?.status, releases: g.github?.releases } : null,
     reply_tone: g.sentiment ? { positive: g.sentiment.positive, neutral: g.sentiment.neutral, negative: g.sentiment.negative, summary: g.sentiment.summary } : null,
     red_flags: g.sentiment?.evidence || {}, reasons: g.reception.reasons });
   const toReview = groups.filter(g => g.status === "ok" && strong(g) && !opinions[`${g.id}|${g.reception.verdict}`]).slice(0, opts.maxReviews ?? 15);
   if (toReview.length && haiku.review) {
     const r = await haiku.review(toReview.map(facts));
-    for (const g of toReview) if (r.get(g.id)) opinions[`${g.id}|${g.reception.verdict}`] = { ...r.get(g.id), at: today };
+    for (const g of toReview) if (r.get(g.id)) opinions[`${g.id}|${g.reception.verdict}`] = { ...r.get(g.id), at: today, v: REVIEW_VERSION };
     log(`second opinion: ${r.size} reviewed, ${[...r.values()].filter(v => !v.agree).length} disagreed`);
   }
   for (const g of groups) {
