@@ -6,7 +6,8 @@
 //   github     stars, release downloads and star growth of the linked repo
 // GitHub takes priority: a repo many people star or download is well received however
 // small its X post was, and lots of likes on X with a repo nobody stars is buzz, not success.
-// Only red flags several people raise (scam, stolen code…) override GitHub.
+// Only red flags several people raise (scam, stolen code…) override GitHub. Stars count only
+// when the repo is the poster's own (ownsRepo), so linking a famous project borrows nothing.
 import { SERIOUS_FLAGS } from "./haiku.js";
 
 const log01 = (v, full) => Math.min(1, Math.log10(1 + Math.max(0, v)) / Math.log10(1 + full));
@@ -29,6 +30,24 @@ export const MIN_REACH = { likes: 20, reposts: 5 };
 
 export const reached = m => m.likes >= MIN_REACH.likes || m.reposts >= MIN_REACH.reposts;
 
+// A linked repo counts as the poster's when its owner matches their X handle or name, or
+// when it was created at most NEW_REPO_DAYS before the post (so it's the clone itself, even
+// if a curator shared it). Anything else is someone else's project, often the original.
+export const NEW_REPO_DAYS = 120;
+const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+export function ownsRepo(entry, gh = entry.github) {
+  const rawOwner = (gh?.repo || entry.repo || "").split("/")[0];
+  const owner = norm(rawOwner);
+  if (!owner) return false;
+  // Words of 5+ letters in the owner ("Anil-matcha" → "matcha") also match the handle
+  const words = rawOwner.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 5);
+  for (const who of [entry.author?.username, entry.author?.name].map(norm))
+    if (who && (who === owner || (Math.min(who.length, owner.length) >= 5 && (who.includes(owner) || owner.includes(who))) ||
+      words.some(w => who.includes(w)))) return true;
+  const created = Date.parse(gh?.created || "");
+  return Number.isFinite(created) && Date.parse(entry.created_at) - created <= NEW_REPO_DAYS * 864e5;
+}
+
 export function starsPerDay(gh) {
   const h = gh?.stars_history || [];
   if (h.length < 2) return null;
@@ -40,7 +59,8 @@ export function score(entry, now = Date.now()) {
   const m = entry.metrics;
   const ageH = (now - Date.parse(entry.created_at)) / 36e5;
   const s = entry.sentiment;
-  const gh = entry.github && entry.github.status !== "gone" ? entry.github : null;
+  const linked = entry.github && entry.github.status !== "gone" ? entry.github : null;
+  const gh = linked && ownsRepo(entry, linked) ? linked : null; // only their own repo counts
   const parts = {};
 
   parts.approval = round(100 * log01(m.likes + 2 * m.reposts + 1.5 * m.bookmarks, 5000));
@@ -77,7 +97,8 @@ export function score(entry, now = Date.now()) {
   const serious = flags.filter(f => SERIOUS_FLAGS.has(f));
   total -= Math.min(30, 10 * (flags.length - serious.length));
   if (serious.length) total -= 30;
-  if (gh?.status === "archived") reasons.push("repo archived");
+  if (linked?.status === "archived") reasons.push("repo archived");
+  if (linked && !gh) reasons.push(`links to someone else's repo (${entry.repo}), so its ${linked.stars.toLocaleString("en")} stars don't count`);
   if (entry.github?.status === "gone") reasons.push("linked repo removed");
   total = Math.max(0, Math.min(100, round(total)));
 
@@ -93,8 +114,8 @@ export function score(entry, now = Date.now()) {
   else if (total < 35 || (net != null && net <= -0.2)) verdict = "stay-away";
   else if (total >= 60 && (net == null || net >= 0.2)) {
     verdict = confirmed ? "well-received" : "unconfirmed";
-    if (!confirmed) reasons.push(gh ? `repo has ${gh.stars} stars and ${gh.downloads} downloads (needs ${CONFIRM.stars} stars or ${CONFIRM.downloads} downloads)` : "no GitHub repo linked");
+    if (!confirmed && !(linked && !gh)) reasons.push(gh ? `repo has ${gh.stars} stars and ${gh.downloads} downloads (needs ${CONFIRM.stars} stars or ${CONFIRM.downloads} downloads)` : "no GitHub repo linked");
   } else verdict = "mixed";
 
-  return { score: total, verdict, parts, net: net == null ? null : Math.round(net * 100) / 100, confirmed, reasons };
+  return { score: total, verdict, parts, net: net == null ? null : Math.round(net * 100) / 100, confirmed, repo_counted: !!gh, reasons };
 }

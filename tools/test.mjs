@@ -111,11 +111,17 @@ assert.equal(pickReadmeImage("![x](https://github.com/a/b/blob/main/s.png)", "a/
 assert.equal(pickReadmeImage("no images here", "a/b"), null);
 
 // GitHub takes priority: a huge repo behind a tiny X post is loved; a scam flag still wins
-const small = { created_at: new Date(T0 - 72 * H).toISOString(), author: { followers: 100 }, metrics: { likes: 7, reposts: 0, replies: 1, quotes: 0, bookmarks: 1, views: 900 },
-  github: { status: "ok", stars: 65300, downloads: 5700000, stars_history: [] } };
+const small = { created_at: new Date(T0 - 72 * H).toISOString(), author: { username: "ChrisTitusTech", followers: 100 }, repo: "ChrisTitusTech/winutil",
+  metrics: { likes: 7, reposts: 0, replies: 1, quotes: 0, bookmarks: 1, views: 900 },
+  github: { status: "ok", repo: "ChrisTitusTech/winutil", created: "2022-01-01", stars: 65300, downloads: 5700000, stars_history: [] } };
 assert.equal(score(small, T0).verdict, "well-received");
 assert.equal(score({ ...small, sentiment: { positive: 1, neutral: 2, negative: 7, sampled: 10, flags: ["scam-or-malware"] } }, T0).verdict, "stay-away");
 assert.equal(score({ ...small, github: { ...small.github, stars: 150, downloads: 0 } }, T0).verdict !== "too-early", true, "100+ stars is never new & untested");
+// Someone else's famous repo lends no stars; a brand-new repo counts whoever shares it
+const curator = { ...small, author: { username: "matchaman11", followers: 100 } };
+assert.equal(score(curator, T0).verdict, "too-early");
+assert.equal(score(curator, T0).repo_counted, false);
+assert.equal(score({ ...curator, github: { ...small.github, created: new Date(T0 - 30 * 864e5).toISOString().slice(0, 10) } }, T0).verdict, "well-received");
 
 // Run 1
 const x = new X("token", log, { maxReads: 2000 });

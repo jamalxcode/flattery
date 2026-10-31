@@ -161,7 +161,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
         ${moveLine(e)}
         ${e.summary ? `<p class="sum">${esc(e.summary)}</p>` : ""}
         <div class="stats"><span class="score">${e.reception.score}</span><span>♥ ${num(e.metrics.likes)}</span>
-          ${e.github && e.github.status !== "gone" ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
+          ${e.github && e.github.status !== "gone" && e.reception.repo_counted !== false ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
           <span>@${esc(e.author.username)}</span></div>
         ${mini(e.sentiment)}
       </div></article></li>`;
@@ -198,7 +198,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
           ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes</h4>${mini(s)}
             <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
           ${s?.flags?.length ? `<div><h4>Red flags people raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div></div>` : ""}
-          ${g ? `<div><h4>On GitHub · ${esc(e.repo)}</h4><div class="figures">${fig(num(g.stars), "stars")}${fig(num(g.forks), "forks")}${fig(num(g.downloads), "downloads")}${growth != null ? fig((growth >= 0 ? "+" : "") + num(growth), "stars a day") : ""}${fig(esc(g.license || "none"), "license")}</div>
+          ${g ? `<div><h4>On GitHub · ${esc(e.repo)}</h4>${e.reception.repo_counted === false ? `<p class="note-small" style="margin-bottom:8px">This repo isn't the poster's own, so its stars and downloads don't count toward the rating.</p>` : ""}<div class="figures">${fig(num(g.stars), "stars")}${fig(num(g.forks), "forks")}${fig(num(g.downloads), "downloads")}${growth != null ? fig((growth >= 0 ? "+" : "") + num(growth), "stars a day") : ""}${fig(esc(g.license || "none"), "license")}</div>
             ${g.status === "archived" ? '<p class="note-small">This repo is archived.</p>' : ""}</div>`
             : `<p class="note-small">${e.repo ? "The linked repo was removed." : "No GitHub repo linked yet, so it can't be confirmed."}</p>`}
           ${e.reception.reasons.length ? `<div class="chips">${e.reception.reasons.map(r => `<span class="chip">${esc(r)}</span>`).join("")}</div>` : ""}
