@@ -3,6 +3,11 @@
 // with everyone's reactions added up. Posts join a group when they link the same repo, or
 // name the same specific project; a name also joins the repo of the same name
 // ("PhotoCraft" ↔ storytold/photocraft). Generic names ("Discord clone") never merge.
+// A suite many people post about without a repo (ArtCraft) then also takes in stray posts
+// that mention it and have no repo of their own: posts listing several of its apps
+// ("PhotoCraft, VectorCraft, FilmCraft"), extensions of its name ("ArtCraft Launcher"), and
+// lone posts about one of its apps ("EffectCraft"). Remaining stray posts without a repo join
+// an existing project they lead with ("PhotoCraft web version", "PhotoCraft, VectorCraft…").
 import { score } from "./reception.js";
 
 const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -31,6 +36,48 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
     }
     const n = nameKey(e);
     if (n) link("name:" + n, e.id);
+  }
+
+  // Suites: name-only groups (no repo) of 3+ posts
+  const size = new Map(), hasRepo = new Set();
+  for (const e of posts) { const r = find(e.id); size.set(r, (size.get(r) || 0) + 1); if (e.repo) hasRepo.add(r); }
+  const suites = new Map(); // name key -> root id
+  for (const e of posts) {
+    const r = find(e.id), n = nameKey(e);
+    if (n && size.get(r) >= 3 && !hasRepo.has(r) && !suites.has(n)) suites.set(n, r);
+  }
+  for (const e of posts) {
+    if (e.repo || !suites.size) continue;
+    const r = find(e.id);
+    if (size.get(r) !== 1) continue; // already part of a project
+    const own = norm(e.project), text = norm(e.text);
+    const multi = String(e.project || "").split(/,|\band\b|&|\//i).filter(x => norm(x).length >= 3).length >= 2;
+    for (const [k, root] of suites) {
+      if (find(root) === r) continue;
+      if ((own.startsWith(k) || multi || text.includes(k)) && (text.includes(k) || own.includes(k))) { join(root, e.id); break; }
+    }
+  }
+
+  // Stray posts that lead with an existing project's name
+  const index = new Map(); // name key -> root, for projects of 2+ posts or with a repo
+  const grown = new Map();
+  for (const e of posts) grown.set(find(e.id), (grown.get(find(e.id)) || 0) + 1);
+  for (const e of posts) {
+    const r = find(e.id);
+    if (grown.get(r) < 2 && !e.repo) continue;
+    const n = nameKey(e);
+    if (n && !index.has(n)) index.set(n, r);
+    const rn = norm(e.repo?.split("/")[1]);
+    if (rn.length >= 5 && !GENERIC.test(rn) && !index.has(rn)) index.set(rn, r);
+  }
+  for (const e of posts) {
+    const r = find(e.id);
+    if (e.repo || grown.get(r) !== 1) continue;
+    const first = norm(String(e.project || "").split(/,|،|\band\b|&|\//i)[0]);
+    const own = norm(e.project);
+    let target = index.get(first), best = 0;
+    if (!target) for (const [k, root] of index) if (k.length >= 5 && k.length > best && own.startsWith(k)) { target = root; best = k.length; }
+    if (target && find(target) !== r) join(target, e.id);
   }
 
   const members = new Map();
