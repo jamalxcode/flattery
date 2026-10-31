@@ -1,8 +1,8 @@
-# Scans X every 2 hours and publishes the catalog with the site. Each run builds on the
+# Scans X every 8 hours and publishes the catalog with the site. Each run builds on the
 # previously published catalog: nothing found is dropped, known posts get fresh metrics,
 # and linked GitHub repos are re-checked for stars and downloads.
 #
-# X bills per post read, so --max-reads caps each run (600 posts × 12 runs a day). Raise or
+# X bills per post read, so --max-reads caps each run (1,000 posts × 3 runs a day). Raise or
 # lower it to fit the budget. A 6-minute budget keeps a normal run short.
 #
 # Backfill: Actions → Scan and deploy → Run workflow, with "backfill_days" (e.g. 21) and a
@@ -21,7 +21,7 @@
 name: Scan and deploy
 on:
   push: { branches: [main] }
-  schedule: [{ cron: "17 */2 * * *" }]
+  schedule: [{ cron: "17 */8 * * *" }]
   workflow_dispatch:
     inputs:
       backfill_days:
@@ -29,7 +29,7 @@ on:
         default: "0"
       max_reads:
         description: "Most X posts to read in this run (X bills per post)"
-        default: "600"
+        default: "1000"
 permissions: { contents: write, pages: write, id-token: write }  # contents: write saves the catalog to the data branch
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
@@ -74,7 +74,7 @@ jobs:
           mkdir -p data
           BACKFILL="${{ inputs.backfill_days || '0' }}"
           if [ "$BACKFILL" != "0" ]; then EXTRA="--backfill-days $BACKFILL --max-reactions 40 --budget-sec 900"; else EXTRA="--budget-sec 360"; fi
-          if node tools/scan.mjs --max-reads "${{ inputs.max_reads || '600' }}" --rotate $EXTRA --cache "$RUNNER_TEMP/prev.json" --out data; then
+          if node tools/scan.mjs --max-reads "${{ inputs.max_reads || '1000' }}" --rotate $EXTRA --cache "$RUNNER_TEMP/prev.json" --out data; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::scan failed, republishing the previous catalog"

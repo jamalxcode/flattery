@@ -1,7 +1,7 @@
-// The catalog is published by the scheduled workflow every 2 hours. The page keeps
+// The catalog is published by the scheduled workflow every 8 hours. The page keeps
 // showing the last scan and swaps in a newer one when it appears.
 const $ = id => document.getElementById(id);
-const INTERVAL_MIN = 120;
+const INTERVAL_MIN = 480;
 let live = null;
 
 // Theme: Auto (system) → Light → Dark, remembered per browser, as on go.sala.company

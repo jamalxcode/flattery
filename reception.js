@@ -4,8 +4,9 @@
 //              accounts don't win on reach alone
 //   sentiment  share of positive vs negative replies and quote posts (Haiku)
 //   github     stars, release downloads and star growth of the linked repo
-// A post is "well received" only when GitHub confirms it: lots of likes on X with a repo
-// nobody stars is buzz, not success.
+// GitHub takes priority: a repo many people star or download is well received however
+// small its X post was, and lots of likes on X with a repo nobody stars is buzz, not success.
+// Only red flags several people raise (scam, stolen code…) override GitHub.
 import { SERIOUS_FLAGS } from "./haiku.js";
 
 const log01 = (v, full) => Math.min(1, Math.log10(1 + Math.max(0, v)) / Math.log10(1 + full));
@@ -21,6 +22,8 @@ export const VERDICTS = {
 
 // Thresholds a linked repo must reach to count as confirmed.
 export const CONFIRM = { stars: 100, downloads: 500 };
+// Thresholds where GitHub alone makes a clone well received.
+export const STRONG = { stars: 1000, downloads: 10000 };
 // Minimum reach before a post is judged at all, and replies fetched.
 export const MIN_REACH = { likes: 20, reposts: 5 };
 
@@ -49,15 +52,16 @@ export function score(entry, now = Date.now()) {
     net = (s.positive - s.negative) / s.sampled;
     parts.sentiment = round(50 + 50 * net);
   }
-  let confirmed = false;
+  let confirmed = false, strong = false;
   if (gh) {
     const growth = starsPerDay(gh);
     parts.github = round(100 * (0.6 * log01(gh.stars, 5000) + 0.25 * log01(gh.downloads, 20000) + 0.15 * (growth == null ? log01(gh.stars, 5000) : log01(growth, 200))));
     confirmed = gh.stars >= CONFIRM.stars || gh.downloads >= CONFIRM.downloads;
+    strong = gh.stars >= STRONG.stars || gh.downloads >= STRONG.downloads;
   }
 
   // Weighted mean over the parts we have
-  const weights = { approval: 30, interest: 10, sentiment: 35, github: 25 };
+  const weights = { approval: 25, interest: 5, sentiment: 25, github: 45 };
   let sum = 0, wsum = 0;
   for (const [k, w] of Object.entries(weights)) if (parts[k] != null) { sum += parts[k] * w; wsum += w; }
   let total = wsum ? sum / wsum : 0;
@@ -80,6 +84,11 @@ export function score(entry, now = Date.now()) {
   let verdict;
   if (serious.length) { verdict = "stay-away"; reasons.push(`red flag: ${serious.join(", ")}`); }
   else if (entry.github?.status === "gone") verdict = "stay-away";
+  else if (strong) {
+    // Lots of stars or downloads: well received, unless the replies are clearly negative
+    verdict = net != null && net <= -0.2 ? "mixed" : "well-received";
+    reasons.push(`${gh.stars.toLocaleString("en")} GitHub stars${gh.downloads ? ` and ${gh.downloads.toLocaleString("en")} downloads` : ""}`);
+  } else if (confirmed && (net == null || net > -0.2)) verdict = total >= 50 ? "well-received" : "mixed";
   else if (!reached(m) || (ageH < 24 && !s)) verdict = "too-early";
   else if (total < 35 || (net != null && net <= -0.2)) verdict = "stay-away";
   else if (total >= 60 && (net == null || net >= 0.2)) {

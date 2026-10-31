@@ -1,5 +1,5 @@
 // Runs a Flattery scan of X and writes <out>/latest.json and <out>/latest.html.
-// The scheduled workflow runs this every 2 hours; it also works locally:
+// The scheduled workflow runs this every 8 hours; it also works locally:
 //
 //   X_BEARER_TOKEN=... ANTHROPIC_API_KEY=... GITHUB_TOKEN=... node tools/scan.mjs --cache prev.json
 //
@@ -22,8 +22,8 @@ const { values: a } = parseArgs({
     out: { type: "string", default: "data" },
     "max-reads": { type: "string", default: "600" },
     "per-query": { type: "string", default: "50" },
-    "products-per-run": { type: "string", default: "6" },
-    "max-reactions": { type: "string", default: "10" },
+    "products-per-run": { type: "string", default: "27" },
+    "max-reactions": { type: "string", default: "20" },
     "budget-sec": { type: "string", default: "0" },
     "max-wait": { type: "string", default: "60" },
     rotate: { type: "boolean", default: false },
@@ -48,7 +48,7 @@ if (a.cache) {
 const x = new X(xToken, log, { maxReads: +a["max-reads"], maxWait: +a["max-wait"] });
 const haiku = new Haiku(log);
 const { results, info: runInfo } = await run(prev, {
-  rotate: a.rotate ? Math.floor(Date.now() / 7200e3) : 0,
+  rotate: a.rotate ? Math.floor(Date.now() / 288e5) : 0,
   deadline: +a["budget-sec"] ? t0 + +a["budget-sec"] * 1000 : 0,
   perQuery: +a["per-query"],
   productsPerRun: +a["products-per-run"],
