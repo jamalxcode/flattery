@@ -73,9 +73,9 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <section class="hero">
         <div class="hero-copy">
           <div class="pills"><span class="pill accent" data-r="count"></span><span class="pill">Found on X · checked on GitHub</span></div>
+          <blockquote class="tagline">“Imitation is the sincerest form of flattery.”<span>Hence the name: every project here imitates software you already know.</span></blockquote>
           <h1>Software clones, <em>rated by the crowd.</em></h1>
           <p class="lede">Reverse-engineered, reimagined and cloned versions of apps you know, found on X and ranked by how people reacted: likes, reposts, the tone of the replies, and GitHub stars and downloads as proof.</p>
-          <p class="quote">“Imitation is the sincerest form of flattery that mediocrity can pay to greatness.” — Oscar Wilde</p>
           <p class="status" data-r="status"></p>
         </div>
         <div class="legend"><h2>Ratings</h2><div data-r="legend"></div></div>

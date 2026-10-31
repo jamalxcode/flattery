@@ -62,7 +62,8 @@ button { font: inherit; color: inherit; }
 h1 { font-size: clamp(2.3rem, 4.4vw, 3.7rem); line-height: 1.03; letter-spacing: -0.04em; font-weight: 800; }
 h1 em { font-style: normal; color: var(--accent); }
 .lede { font-size: 1.1rem; color: var(--text-muted); max-width: 520px; }
-.quote { font-size: 0.9rem; color: var(--text-muted); font-style: italic; }
+.tagline { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; font: italic 1.3rem/1.35 Georgia, "Times New Roman", serif; color: var(--text); }
+.tagline span { display: block; margin-top: 4px; font: normal 0.88rem/1.4 'Inter', -apple-system, sans-serif; color: var(--text-muted); }
 .status { font-size: 0.85rem; color: var(--text-muted); }
 .status a { font-weight: 600; text-decoration: none; }
 
