@@ -1,0 +1,20 @@
+# Diagnoses flattery.sala.company from GitHub's servers (DNS records and what the site answers),
+# since a cloud session can't resolve outside hostnames. Run it from Actions → Check domain.
+name: Check domain
+on: { workflow_dispatch: {} }
+permissions: { contents: read }
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for d in flattery.sala.company radio.sala.company sala.company; do
+            echo "== $d"
+            for t in CNAME A AAAA; do echo "$t: $(dig +short "$d" $t @1.1.1.1 | tr '\n' ' ')"; done
+          done
+          echo "== NS of sala.company: $(dig +short sala.company NS @1.1.1.1 | tr '\n' ' ')"
+          echo "== authoritative answer for flattery.sala.company:"
+          ns=$(dig +short sala.company NS @1.1.1.1 | head -1); [ -n "$ns" ] && dig flattery.sala.company @"$ns" +noall +answer || true
+          for u in http://flattery.sala.company/ https://flattery.sala.company/ https://jamalxcode.github.io/flattery/; do
+            echo "== $u"; curl -sS -o /dev/null -m 20 -w "%{http_code} %{redirect_url} ssl_verify=%{ssl_verify_result}\n" "$u" || true
+          done
