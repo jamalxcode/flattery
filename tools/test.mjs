@@ -176,6 +176,9 @@ const x5 = new X("token", log, { maxReads: 3000 });
 const r5 = await run(r1, { perQuery: 50, productsPerRun: 0, search: ["Webshop"] }, { x: x5, haiku, githubStats, log, now: T0 + 48 * H });
 assert.ok(reads.some(r => r.includes('"Webshop" -is:retweet')), "the name is searched");
 assert.ok(by(r5, "p1").found_by.includes("search: Webshop"));
+const x6 = new X("token", log, { maxReads: 3000 });
+await run(r1, { perQuery: 50, productsPerRun: 0, search: ["from:alice"] }, { x: x6, haiku, githubStats, log, now: T0 + 48 * H });
+assert.ok(reads.some(r => r.endsWith("?from:alice -is:retweet")), "X operators are passed through as typed");
 
 // Posts about the same project merge: same name across posts, and a name joins its repo
 const mkp = (id, project, likes, repo) => ({ id, project, repo, status: "ok", url: "u" + id, created_at: new Date(T0 - 50 * H).toISOString(),
@@ -191,6 +194,21 @@ assert.equal(gby("g1").metrics.likes, 130, "their likes add up");
 assert.equal(gby("g3"), gby("g4"), "a name joins the repo of the same name");
 assert.equal(gby("g3").repo, "storytold/photocraft");
 assert.notEqual(gby("g5"), gby("g6"), "generic names never merge");
+// Stray posts about a suite join it; posts with their own repo don't
+const suite = [mkp("s1", "ArtCraft", 10), mkp("s2", "ArtCraft", 5), mkp("s3", "Artcraft", 1),
+  { ...mkp("s4", "PhotoCraft, VectorCraft, FilmCraft", 0), text: "ArtCraft released three apps" },
+  { ...mkp("s5", "ArtCraft Launcher", 0), text: "How to install the ArtCraft launcher" },
+  { ...mkp("s6", "EffectCraft", 0), text: "We tested EffectCraft from ArtCraft" },
+  { ...mkp("s7", "CADCraft", 4, "storytold/cadcraft"), text: "CADCraft from @get_artcraft" }];
+for (const e of suite) e.reception = score(e, T0);
+const sg = buildGroups(suite, [], "2026-10-30", T0);
+const art = sg.find(g => g.posts.some(p => p.id === "s1"));
+assert.deepEqual(art.posts.map(p => p.id).sort(), ["s1", "s2", "s3", "s4", "s5", "s6"]);
+assert.ok(!art.posts.some(p => p.id === "s7"), "a post with its own repo keeps its own card");
+// Stray posts that lead with an existing project's name join it
+const lead = [mkp("l1", "PhotoCraft", 5, "storytold/photocraft"), mkp("l2", "PhotoCraft web version", 0), mkp("l3", "PhotoCraft, VectorCraft, FilmCraft", 0)];
+for (const e of lead) e.reception = score(e, T0);
+assert.equal(buildGroups(lead, [], "2026-10-30", T0).length, 1);
 assert.ok(r1.groups.length >= 1 && r1.groups.every(g => g.reception && g.history.length));
 
 console.log(`ok: ${r1.results.length} posts, ${firstReads} + ${x2.reads} X reads`);

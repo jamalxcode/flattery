@@ -128,7 +128,10 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
     // searchDays days, popular first, whatever its reach; triage still decides
     for (const term of opts.search || []) {
       if (outOfTime()) break;
-      const q = `"${term.replaceAll('"', "")}" -is:retweet -is:reply`;
+      // A plain name is searched as a phrase; X operators (from:echelon, url:…) as typed
+      const q = /\b(from|to|url|has|is|lang|conversation_id|list|place):/i.test(term)
+        ? (/-is:retweet/.test(term) ? term : `${term} -is:retweet`)
+        : `"${term.replaceAll('"', "")}" -is:retweet -is:reply`;
       let posts;
       try {
         ({ posts } = await x.search(q, { archive: canArchive, startTime: canArchive ? iso(now - (opts.searchDays ?? 21) * 864e5) : undefined, max: opts.searchMax ?? 100 }));
