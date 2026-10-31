@@ -27,7 +27,7 @@ async function graphql(token, query, log) {
 const fields = since => `nameWithOwner url homepageUrl owner { __typename avatarUrl(size: 160) } description isArchived isFork pushedAt createdAt stargazerCount forkCount
   watchers { totalCount } licenseInfo { spdxId } primaryLanguage { name }
   defaultBranchRef { target { ... on Commit { history(since: "${since}") { totalCount } } } }
-  releases(first: 10, orderBy: { field: CREATED_AT, direction: DESC }) { totalCount nodes { releaseAssets(first: 30) { nodes { name downloadCount downloadUrl } } } }`;
+  releases(first: 10, orderBy: { field: CREATED_AT, direction: DESC }) { totalCount nodes { tagName releaseAssets(first: 30) { nodes { name downloadCount } } } }`;
 
 // Which systems a release can be installed on, from its file names
 export function platformsOf(names) {
@@ -43,7 +43,7 @@ export function platformsOf(names) {
 
 // The file to download for each system, from the newest release that has one: { Mac: url, … }.
 // Prefers installers (dmg, exe/msi, AppImage/deb) over archives, and skips checksums and sources.
-export function downloadsOf(releases) {
+export function downloadsOf(releases, repo) {
   const out = {};
   const RANK = {
     Mac: [/\.dmg$/i, /\.pkg$/i, /(mac|darwin|osx).*\.zip$/i],
@@ -52,13 +52,15 @@ export function downloadsOf(releases) {
     Android: [/\.apk$/i],
   };
   for (const rel of releases || []) {
-    const assets = (rel?.releaseAssets?.nodes || []).filter(a => a?.downloadUrl && !/\.(sha\d*|sig|asc|blockmap|ya?ml|txt|json)$|source|symbols|debug/i.test(a.name || ""));
+    // A release file's address: github.com/<repo>/releases/download/<tag>/<file>
+    const url = name => `https://github.com/${repo}/releases/download/${encodeURIComponent(rel.tagName)}/${encodeURIComponent(name)}`;
+    const assets = (rel?.tagName ? rel.releaseAssets?.nodes || [] : []).filter(a => a?.name && !/\.(sha\d*|sig|asc|blockmap|ya?ml|txt|json)$|source|symbols|debug/i.test(a.name || ""));
     for (const [os, tests] of Object.entries(RANK)) {
       if (out[os]) continue;
       for (const re of tests) {
         // Mac builds for Apple chips over Intel ones when both exist
         const hits = assets.filter(a => re.test(a.name)).sort((x, y) => /arm64|aarch64|universal/i.test(y.name) - /arm64|aarch64|universal/i.test(x.name));
-        if (hits.length) { out[os] = hits[0].downloadUrl; break; }
+        if (hits.length) { out[os] = url(hits[0].name); break; }
       }
     }
   }
@@ -79,6 +81,9 @@ export async function repoStats(token, names, log) {
     const res = await graphql(token, `query { ${parts.join("\n")} }`, log);
     // A mistake in the query itself fails every repo: say so in the log, never silently
     if (!res?.data) { log(`GitHub query failed: ${(res?.errors || []).map(e => e.message).join("; ").slice(0, 300) || "no data"}`, "warn"); continue; }
+    // Errors on parts of the answer (one repo, one field) leave the rest usable: log them
+    const partial = (res.errors || []).filter(e => !/NOT_FOUND|FORBIDDEN/.test(e.type || ""));
+    if (partial.length) log(`GitHub query: ${partial.length} errors, e.g. ${partial[0].message.slice(0, 200)}`, "warn");
     const errs = new Map((res.errors || []).map(e => [e.path?.[0], e.type || e.message]));
     batch.forEach((n, j) => {
       const r = res.data[`r${j}`];
@@ -94,7 +99,7 @@ export async function repoStats(token, names, log) {
         watchers: r.watchers?.totalCount || 0,
         releases: r.releases?.totalCount || 0,
         downloads: (r.releases?.nodes || []).reduce((s, rel) => s + (rel?.releaseAssets?.nodes || []).reduce((t, a) => t + (a?.downloadCount || 0), 0), 0),
-        get: downloadsOf(r.releases?.nodes),
+        get: downloadsOf(r.releases?.nodes, r.nameWithOwner),
         org_avatar: r.owner?.__typename === "Organization" ? r.owner.avatarUrl || "" : "",
         platforms: platformsOf((r.releases?.nodes || []).flatMap(rel => (rel?.releaseAssets?.nodes || []).map(a => a?.name || ""))),
         homepage: /^https?:\/\//.test(r.homepageUrl || "") && !/github\.com/.test(r.homepageUrl) ? r.homepageUrl : "",
