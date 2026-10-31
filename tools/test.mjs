@@ -170,6 +170,12 @@ const x4 = new X("token", log, { maxReads: 3000 });
 const r4 = await run(r1, { perQuery: 50, productsPerRun: 1, backfillDays: 21 }, { x: x4, haiku, githubStats, log, now: T0 + 48 * H });
 assert.equal(r4.results.length, 4);
 
+// A named search judges posts about it again, even ones rejected before
+const x5 = new X("token", log, { maxReads: 3000 });
+const r5 = await run(r1, { perQuery: 50, productsPerRun: 0, search: ["Webshop"] }, { x: x5, haiku, githubStats, log, now: T0 + 48 * H });
+assert.ok(reads.some(r => r.includes('"Webshop" -is:retweet')), "the name is searched");
+assert.ok(by(r5, "p1").found_by.includes("search: Webshop"));
+
 console.log(`ok: ${r1.results.length} posts, ${firstReads} + ${x2.reads} X reads`);
 for (const e of r2.results) console.log(`  ${String(e.reception.score).padStart(3)} ${e.reception.verdict.padEnd(13)} ${e.id} ${JSON.stringify(e.reception.parts)} ${e.reception.reasons.join("; ")}`);
 

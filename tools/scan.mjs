@@ -7,6 +7,7 @@
 // --max-reads caps the X posts read per run, which is what X bills for.
 // --backfill-days N also searches the full archive for the last N days (popular posts
 // only), for catching up; it needs full-archive search on the X plan.
+// --search "ArtCraft, Other" also looks for posts about those names (last --search-days days).
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { X } from "../x.js";
@@ -29,6 +30,8 @@ const { values: a } = parseArgs({
     rotate: { type: "boolean", default: false },
     "backfill-days": { type: "string", default: "0" },
     "backfill-per-query": { type: "string", default: "200" },
+    search: { type: "string", default: "" },
+    "search-days": { type: "string", default: "21" },
   },
 });
 
@@ -55,6 +58,8 @@ const { results, info: runInfo } = await run(prev, {
   maxReactions: +a["max-reactions"],
   backfillDays: +a["backfill-days"],
   backfillPerQuery: +a["backfill-per-query"],
+  search: a.search.split(",").map(s => s.trim()).filter(Boolean),
+  searchDays: +a["search-days"],
 }, {
   x, haiku, log,
   githubImage: readmeImage,

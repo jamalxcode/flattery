@@ -118,6 +118,33 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       }
       log(`backfill: ${kept} popular candidates from the last ${opts.backfillDays} days`);
     }
+
+    // Named searches ("ArtCraft"): every original post about it from the last
+    // searchDays days, popular first, whatever its reach; triage still decides
+    for (const term of opts.search || []) {
+      if (outOfTime()) break;
+      const q = `"${term.replaceAll('"', "")}" -is:retweet -is:reply`;
+      let posts;
+      try {
+        ({ posts } = await x.search(q, { archive: canArchive, startTime: canArchive ? iso(now - (opts.searchDays ?? 21) * 864e5) : undefined, max: opts.searchMax ?? 100 }));
+      } catch (err) {
+        if (!(err instanceof ArchiveError)) throw err;
+        canArchive = false;
+        archiveState = { ok: false, checked: today };
+        ({ posts } = await x.search(q, { max: opts.searchMax ?? 100 }));
+      }
+      counts.searched++;
+      let kept = 0;
+      for (const p of posts) {
+        if (p.is_reply_or_repost) continue;
+        const known = catalog.get(p.id);
+        if (known) { known.found_by = [...new Set([...known.found_by, `search: ${term}`])]; continue; }
+        rejected.delete(p.id); // asked for by name: judge it again
+        if (!fresh.has(p.id)) { fresh.set(p.id, { ...p, found_by: [] }); kept++; }
+        fresh.get(p.id).found_by.push(`search: ${term}`);
+      }
+      log(`search for "${term}": ${posts.length} posts, ${kept} new candidates`);
+    }
     counts.candidates = fresh.size;
 
     // 3. Triage
