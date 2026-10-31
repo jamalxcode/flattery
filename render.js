@@ -1,6 +1,6 @@
-// Renders the catalog as an app store: hero with the rating legend, a shelf of the best
-// loved, filters, a grid of cards, and a detail sheet per clone. Shared by the live page
-// and the standalone report. opts.search: an <input> outside root to filter with.
+// Renders the catalog as an app store: a sidebar of ratings and categories, Discover shelves
+// (most loved, rising, promoted, new), a list of app rows, and a detail sheet per clone.
+// Shared by the live page and the standalone report. opts.search: an <input> outside root to filter with.
 // opts.base: where the catalog's files (thumbnails) live, relative to the page ("data/").
 const RATINGS = [
   ["well-received", "❤️", "Loved", "Real use on GitHub and a real crowd on X, mostly positive.", "loved"],
@@ -15,6 +15,7 @@ const RATINGS = [
 // Order for promotions and demotions
 const RANK = { "stay-away": 0, faded: 0.5, "too-early": 1, mixed: 2, unconfirmed: 3, proven: 3.5, "well-received": 4 };
 const SITE = "https://flattery.sala.company/";
+const CAT_ICON = { Design: "🎨", Office: "📄", "Dev tools": "🛠", AI: "🤖", Media: "🎬", Utilities: "🧰", Communication: "💬", Business: "💼", Games: "🎮", Other: "📦" };
 const CATEGORIES = ["Design", "Office", "Dev tools", "AI", "Media", "Utilities", "Communication", "Business", "Games", "Other"];
 // Approximate yearly list prices (USD) of originals, for "saves about $X a year"
 const PRICES = {
@@ -97,56 +98,56 @@ function renderReport(root, DATA, INFO, opts = {}) {
 
   if (!root.dataset.ready) {
     root.innerHTML = `
-      <section class="hero">
-        <div class="hero-copy">
-          <div class="pills"><span class="pill accent" data-r="count"></span><span class="pill">Found on X, Hacker News &amp; Reddit · checked on GitHub</span></div>
-          <blockquote class="tagline">“Imitation is the sincerest form of flattery.”<span>Hence the name: every project here imitates software you already know.</span></blockquote>
-          <h1>Software clones, <em>rated by the crowd.</em></h1>
-          <p class="lede">Reverse-engineered, reimagined and cloned versions of apps you know, found on X, Hacker News and Reddit and ranked by how people reacted: likes, reposts, the tone of the replies, and GitHub stars and downloads as proof.</p>
-          <p class="status" data-r="status"></p>
-          <button type="button" class="newslink" data-r="newsBtn" data-news hidden></button>
+      <div class="store">
+        <nav class="side" aria-label="Browse">
+          <div class="side-group" data-r="side"></div>
+          <h3 class="side-h" data-r="catsH">Categories</h3>
+          <div class="side-group" data-r="cats"></div>
+        </nav>
+        <div class="store-main">
+          <header class="store-head">
+            <h1 data-r="title">Discover</h1>
+            <p class="motto"><q>Imitation is the sincerest form of flattery.</q> <span class="why">Clones of apps you know, rated by the crowd on X, Hacker News and Reddit, and checked on GitHub.</span> <span class="status" data-r="status"></span></p>
+          </header>
+          <div data-r="discover"></div>
+          <section id="apps">
+            <div class="sec-head">
+              <h2 data-r="listTitle"></h2>
+              <div class="selects">
+                ${search ? "" : `<input type="search" class="search" data-r="q" placeholder="Search clones…" aria-label="Search clones" style="padding-left:16px;height:36px;width:180px">`}
+                <select data-r="product" aria-label="Clones of"></select>
+                <select data-r="use" aria-label="Can I use it">
+                  <option value="">Usable or not</option><option value="install">Ready to install</option><option value="online">Try online</option>
+                  <option value="licensed">Has a license</option><option value="alive">Still maintained</option>
+                </select>
+                <select data-r="sort" aria-label="Sort">
+                  <option value="score">Top rated</option><option value="likes">Most liked</option><option value="stars">Most GitHub stars</option>
+                  <option value="downloads">Most downloads</option><option value="newest">Newest</option>
+                </select>
+              </div>
+            </div>
+            <p class="list-desc" data-r="listDesc" hidden></p>
+            <div class="alt-title" data-r="altTitle" hidden></div>
+            <p class="results" data-r="results" hidden></p>
+            <ul class="grid rows" data-r="grid"></ul>
+          </section>
+          <details class="rejected" data-r="rejWrap"><summary>Recently left out by the filter</summary>
+            <p class="note-small">Popular posts Claude Haiku judged not to be clone announcements.</p>
+            <ul class="posts" data-r="rej"></ul></details>
+          <details class="rejected" data-r="downWrap"><summary data-r="downTitle">Taken down after objections</summary>
+            <p class="note-small">Listings removed automatically after enough people objected on X (six or more established accounts, real reasons, spread over time).</p>
+            <ul class="posts" data-r="down"></ul></details>
+          <details class="rejected" data-r="statusWrap"><summary>Status</summary><div data-r="statusBody"></div></details>
         </div>
-        <div class="legend"><h2>Ratings</h2><div data-r="legend"></div></div>
-      </section>
-      <section class="fresh" data-r="riseWrap"><h2 class="section-title">📈 Rising on GitHub</h2><ul class="shelf" data-r="rise"></ul></section>
-      <section class="fresh" data-r="upWrap"><h2 class="section-title">⬆ Just promoted</h2><ul class="shelf" data-r="up"></ul></section>
-      <section class="fresh" data-r="shelfWrap"><h2 class="section-title">❤️ Most loved</h2><ul class="shelf" data-r="shelf"></ul></section>
-      <section id="apps">
-        <div class="cats" data-r="cats"></div>
-        <div class="filters-row">
-          <div class="filters" data-r="filters"></div>
-          <select class="filter-select" data-r="filterSelect" aria-label="Rating"></select>
-          <div class="selects">
-            ${search ? "" : `<input type="search" class="search" data-r="q" placeholder="Search clones…" aria-label="Search clones" style="padding-left:16px;height:40px;width:200px">`}
-            <select data-r="product" aria-label="Clones of"></select>
-            <select data-r="use" aria-label="Can I use it">
-              <option value="">Usable or not</option><option value="install">Ready to install</option><option value="online">Try online</option>
-              <option value="licensed">Has a license</option><option value="alive">Still maintained</option>
-            </select>
-            <select data-r="sort" aria-label="Sort">
-              <option value="score">Top rated</option><option value="likes">Most liked</option><option value="stars">Most GitHub stars</option>
-              <option value="downloads">Most downloads</option><option value="newest">Newest</option>
-            </select>
-          </div>
-        </div>
-        <div class="alt-title" data-r="altTitle" hidden></div>
-        <p class="results" data-r="results" hidden></p>
-        <ul class="grid" data-r="grid"></ul>
-      </section>
-      <details class="rejected" data-r="rejWrap"><summary>Recently left out by the filter</summary>
-        <p class="note-small">Popular posts Claude Haiku judged not to be clone announcements.</p>
-        <ul class="posts" data-r="rej"></ul></details>
-      <details class="rejected" data-r="downWrap"><summary data-r="downTitle">Taken down after objections</summary>
-        <p class="note-small">Listings removed automatically after enough people objected on X (six or more established accounts, real reasons, spread over time).</p>
-        <ul class="posts" data-r="down"></ul></details>
-      <details class="rejected" data-r="statusWrap"><summary>Status</summary><div data-r="statusBody"></div></details>
+      </div>
       <dialog class="sheet" data-r="sheet"></dialog>
       <dialog class="drawer" id="news" data-r="newsDrawer" aria-label="This week in clones"></dialog>`;
     root.dataset.ready = "1";
     root._filter = "rated";
     const rerender = () => renderReport(root, root._data, root._info, opts);
-    root.querySelectorAll("select:not([data-r=filterSelect]),[data-r=q]").forEach(el => el.addEventListener("input", rerender));
-    root.querySelector("[data-r=filterSelect]").addEventListener("input", ev => { root._filter = ev.target.value; rerender(); });
+    root.querySelectorAll("select,[data-r=q]").forEach(el => el.addEventListener("input", rerender));
+    // Picking a section in the sidebar shows it from the top
+    const toTop = () => { const m = root.querySelector(".store-main"); if (m.getBoundingClientRect().top < 0) m.scrollIntoView({ block: "start" }); };
     // Searching shows the results right away: the grid is far below the search box
     const toResults = () => {
       const apps = root.querySelector("#apps");
@@ -159,7 +160,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
     }
     root.addEventListener("click", ev => {
       const c = ev.target.closest("[data-cat]");
-      if (c) { root._cat = root._cat === c.dataset.cat ? "" : c.dataset.cat; rerender(); return; }
+      if (c) { root._cat = root._cat === c.dataset.cat ? "" : c.dataset.cat; rerender(); toTop(); return; }
       if (ev.target.closest("[data-clear]")) {
         for (const box of [search, root.querySelector("[data-r=q]")].filter(Boolean)) box.value = "";
         rerender();
@@ -167,9 +168,10 @@ function renderReport(root, DATA, INFO, opts = {}) {
       }
       const f = ev.target.closest("[data-filter]");
       if (f) {
-        root._filter = root._filter === f.dataset.filter && f.closest("[data-r=legend]") ? "all" : f.dataset.filter;
+        root._filter = f.dataset.filter;
+        if (f.dataset.filter === "rated") root._cat = "";
         rerender();
-        if (f.closest("[data-r=legend]")) root.querySelector("#apps").scrollIntoView({ behavior: "smooth" });
+        toTop();
         return;
       }
       if (ev.target.closest("[data-news]")) { root.flattery.news(); return; }
@@ -198,56 +200,68 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const $ = k => root.querySelector(`[data-r=${k}]`);
   const by = v => live.filter(e => e.reception.verdict === v);
 
-  $("count").textContent = `${live.length} clones tracked`;
   if (search) search.placeholder = `Search ${live.length} clones…`;
-  $("legend").innerHTML = RATINGS.map(([v, emo, name, desc, cls]) => `
-    <button type="button" class="r-${cls}" data-filter="${v}" aria-pressed="${root._filter === v}">
-      <span class="emo">${emo}</span><span><b>${name}</b><small>${desc}</small></span><span class="n">${by(v).length}</span>
-    </button>`).join("");
 
-  // Most loved: the well received first, topped up with the best of the rest
-  const loved = by("well-received").sort((a, b) => b.reception.score - a.reception.score);
-  $("shelfWrap").hidden = !loved.length;
-  $("shelf").innerHTML = loved.slice(0, 12).map(e => `<li><button type="button" data-open="${esc(e.id)}">
-    <div class="art">${art(e)}</div><span class="name">${esc(name(e))}</span>
-    <span class="meta">❤️ ${e.reception.score} · ★ ${num(e.github?.stars)} · ${esc(what(e) || e.kind)}</span></button></li>`).join("");
-
-  // Rising: the fastest-growing repos that count (the poster's own), by stars a day
+  // A row, as in an app store: icon, name, what it clones, a line of numbers, and the rating
+  // where the price would be
+  const initials = n => (String(n).match(/[A-Za-z0-9]+/g) || ["?"]).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
   const growth = e => {
     const h = e.github?.stars_history || [];
     const days = h.length > 1 ? (Date.parse(h.at(-1).at) - Date.parse(h[0].at)) / 864e5 : 0;
     return days >= 0.9 && e.reception.repo_counted ? (h.at(-1).stars - h[0].stars) / days : 0;
   };
-  const rising = live.filter(e => growth(e) >= 5).sort((a, b) => growth(b) - growth(a));
-  $("riseWrap").hidden = !rising.length;
-  $("rise").innerHTML = rising.slice(0, 12).map(e => `<li><button type="button" data-open="${esc(e.id)}"><div class="art">${art(e)}</div><span class="name">${esc(name(e))}</span>
-    <span class="meta">+${num(Math.round(growth(e)))} ★ a day · ${rating(e.reception.verdict)[1]} ${esc(what(e) || e.kind)}</span></button></li>`).join("");
+  const counted = e => e.github && e.github.status !== "gone" && e.reception.repo_counted !== false;
+  const row = (e, note) => {
+    const [, emo, rname, , cls] = rating(e.reception.verdict);
+    const u = usable(e), m = moved(e);
+    const bits = [
+      note,
+      m ? `<span class="move ${m.up ? "up" : "down"}">${m.up ? "⬆ promoted" : `⬇ was ${rating(m.prev)[1]}`}</span>` : "",
+      `♥ ${num(e.metrics.likes)}`,
+      counted(e) ? `★ ${num(e.github.stars)}` : "",
+      u ? (u.ready === "install" ? `⬇ ${esc(u.platforms.join(" · "))}` : u.ready === "online" ? "🌐 Try online" : "") : "",
+      u?.alive === "abandoned" ? '<span class="dead">🪦 abandoned</span>' : "",
+      e.trials ? `✅ ${e.trials.works} · ❌ ${e.trials.broken}` : "",
+      e.reception.disputed ? '<span class="obj">⚠️ Disputed</span>' : "",
+      e.objections ? `<span class="obj" title="objections counted">⚑ ${e.objections}</span>` : "",
+      price(e) ? `<span class="save">saves ~$${price(e)}/yr</span>` : "",
+    ].filter(Boolean);
+    return `<li><article class="card r-${cls}${e.status === "gone" ? " gone" : ""}">
+      <div class="icon" style="--h:${hue(name(e))}" aria-hidden="true">${esc(initials(name(e)))}</div>
+      <div class="card-body">
+        <h3><button type="button" data-open="${esc(e.id)}">${esc(name(e))}</button></h3>
+        <p class="of">${esc(ofLine(e))}</p>
+        <p class="meta">${bits.join('<span class="sep">·</span>')}</p>
+      </div>
+      <div class="get"><span class="pill" title="${esc(rname)}, score ${e.reception.score}">${emo} ${e.reception.score}</span><small>${esc(rname)}</small></div>
+    </article></li>`;
+  };
+  const shelf = (title, list, filter, note) => list.length ? `<section class="shelf-sec">
+      <div class="sec-head"><h2>${title}</h2>${filter ? `<button type="button" class="see-all" data-filter="${filter}">See all</button>` : ""}</div>
+      <ul class="rows">${list.slice(0, 6).map(e => row(e, note && note(e))).join("")}</ul></section>` : "";
+  const feature = (e, eyebrow) => `<button type="button" class="feature" data-open="${esc(e.id)}">
+      <div class="art">${art(e)}</div>
+      <span class="eyebrow">${eyebrow}</span><span class="f-name">${esc(name(e))}</span>
+      <span class="f-sum">${esc(e.summary || ofLine(e))}</span></button>`;
 
-  const promoted = live.filter(e => moved(e, 7)?.up).sort((a, b) => b.reception.score - a.reception.score);
-  $("upWrap").hidden = !promoted.length;
-  $("up").innerHTML = promoted.slice(0, 12).map(e => {
-    const [, pe] = rating(moved(e, 7).prev), [, ne] = rating(e.reception.verdict);
-    return `<li><button type="button" data-open="${esc(e.id)}"><div class="art">${art(e)}</div><span class="name">${esc(name(e))}</span>
-      <span class="meta">${pe} → ${ne} · ${esc(what(e) || e.kind)}</span></button></li>`;
-  }).join("");
-
-  const chips = [["rated", "Rated", live.filter(e => !unrated(e.reception.verdict)).length], ["all", "Everything", live.length], ...RATINGS.map(([v, emo, n]) => [v, `${emo} ${n}`, by(v).length])];
+  // Sidebar: ratings, then categories
+  const side = [["rated", "✨", "Discover", live.filter(e => !unrated(e.reception.verdict)).length, ""], ["all", "🗂", "Everything", live.length, ""],
+    ...RATINGS.map(([v, emo, n, , cls]) => [v, emo, n, by(v).length, cls])];
   const gone = DATA.length - live.length;
-  if (gone) chips.push(["gone", "🗑 Removed", gone]);
-  $("filterSelect").innerHTML = chips.map(([v, t, n]) => `<option value="${v}"${root._filter === v ? " selected" : ""}>${t} (${n})</option>`).join("");
-  $("filters").innerHTML = chips.map(([v, t, n]) => `<button type="button" class="filter" data-filter="${v}" aria-pressed="${root._filter === v}">${t} <span class="n">${n}</span></button>`).join("");
+  if (gone) side.push(["gone", "🗑", "Removed", gone, ""]);
+  $("side").innerHTML = side.map(([v, emo, t, n, cls]) => `<button type="button" class="side-item${cls ? ` r-${cls}` : ""}" data-filter="${v}" aria-pressed="${root._filter === v && (v !== "rated" || !root._cat)}">
+      <span class="emo">${emo}</span><span class="t">${esc(t)}</span><span class="n">${n}</span></button>`).join("");
+  const catCount = new Map();
+  for (const e of live) if (e.category) catCount.set(e.category, (catCount.get(e.category) || 0) + 1);
+  $("catsH").hidden = !catCount.size;
+  $("cats").innerHTML = CATEGORIES.filter(c => catCount.has(c)).map(c => `<button type="button" class="side-item" data-cat="${esc(c)}" aria-pressed="${root._cat === c}">
+      <span class="emo">${CAT_ICON[c] || "•"}</span><span class="t">${esc(c)}</span><span class="n">${catCount.get(c)}</span></button>`).join("");
 
   const counts = new Map();
   for (const e of live) if (what(e)) counts.set(what(e), (counts.get(what(e)) || 0) + 1);
   const pick = $("product").value;
   $("product").innerHTML = '<option value="">Clones of anything</option>' + [...counts].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
     .map(([p, c]) => `<option value="${esc(p)}"${p === pick ? " selected" : ""}>${esc(p)} (${c})</option>`).join("");
-
-  // Categories, like an app store
-  const catCount = new Map();
-  for (const e of live) if (e.category) catCount.set(e.category, (catCount.get(e.category) || 0) + 1);
-  $("cats").innerHTML = catCount.size ? [["", "All categories", live.length], ...CATEGORIES.filter(c => catCount.has(c)).map(c => [c, c, catCount.get(c)])]
-    .map(([v, t, n]) => `<button type="button" class="cat" data-cat="${esc(v)}" aria-pressed="${(root._cat || "") === v}">${esc(t)} <span class="n">${n}</span></button>`).join("") : "";
 
   const useWant = $("use").value;
   const useOk = e => {
@@ -287,22 +301,39 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const key = $("sort").value;
   rows.sort((a, b) => sorts[key](b) - sorts[key](a));
 
-  $("grid").innerHTML = rows.length ? rows.map(e => {
-    const [, emo, rname, , cls] = rating(e.reception.verdict);
-    return `<li><article class="card r-${cls}${e.status === "gone" ? " gone" : ""}">
-      <div class="art">${art(e)}<span class="rate"><i>${emo}</i>${rname}</span></div>
-      <div class="card-body">
-        <h3><button type="button" data-open="${esc(e.id)}">${esc(name(e))}</button></h3>
-        <p class="of">${esc(ofLine(e))}${price(e) ? ` <span class="save">saves ~$${price(e)}/yr</span>` : ""}</p>
-        ${moveLine(e)}
-        ${useLine(e)}
-        ${e.summary ? `<p class="sum">${esc(e.summary)}</p>` : ""}
-        <div class="stats"><span class="score">${e.reception.score}</span><span>♥ ${num(e.metrics.likes)}</span>
-          ${e.github && e.github.status !== "gone" && e.reception.repo_counted !== false ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
-          <span>${e.group ? `${e.posts.length} posts` : e.source && e.source !== "x" ? `${src(e)} · ${esc(e.author.username)}` : `@${esc(e.author.username)}`}</span>${e.objections ? `<span class="obj" title="objections counted">⚑ ${e.objections}</span>` : ""}${e.trials ? `<span title="People who tried it">✅ ${e.trials.works} · ❌ ${e.trials.broken}</span>` : ""}${e.reception.disputed ? '<span class="obj" title="Some people raised a serious concern, most replies are positive">⚠️ Disputed</span>' : ""}</div>
-        ${mini(e.sentiment)}
-      </div></article></li>`;
-  }).join("") : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
+  $("grid").innerHTML = rows.length ? rows.map(e => row(e)).join("")
+    : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
+
+  // Titles: the view's name on top, and on Discover a few shelves above the full list
+  const view = f === "rated" ? ["✨", "Discover"] : f === "all" ? ["🗂", "Everything"] : f === "gone" ? ["🗑", "Removed"] : rating(f).slice(1, 3);
+  const discover = f === "rated" && !root._cat && !q && !pick && !useWant;
+  $("title").textContent = root._cat && f === "rated" ? `${CAT_ICON[root._cat] || ""} ${root._cat}` : discover ? "Discover" : `${view[0]} ${view[1]}${root._cat ? ` · ${root._cat}` : ""}`;
+  $("listTitle").textContent = discover ? "All rated clones" : q ? "Search results" : `${rows.length} ${rows.length === 1 ? "clone" : "clones"}`;
+  const desc = RATINGS.find(r => r[0] === f);
+  $("listDesc").hidden = !desc || discover;
+  if (desc) $("listDesc").textContent = desc[3];
+  if (discover) {
+    const top = list => [...list].sort((x, y) => y.reception.score - x.reception.score);
+    const loved = top(by("well-received"));
+    const rising = live.filter(e => growth(e) >= 5).sort((x, y) => growth(y) - growth(x));
+    const promoted = top(live.filter(e => moved(e, 7)?.up));
+    const newest = live.filter(e => Date.now() - Date.parse(e.created_at) < 7 * 864e5 && e.reception.verdict !== "stay-away")
+      .sort((x, y) => y.metrics.likes - x.metrics.likes);
+    // Two big picture cards, as an app store features its picks: ones with a screenshot
+    const seen = new Set(), feats = [];
+    // Not the ones already at the top of Most loved, unless nothing else has a picture
+    for (const [e, eyebrow] of [...rising.map(e => [e, `📈 Rising · +${num(Math.round(growth(e)))} ★ a day`]), ...top(by("proven")).map(e => [e, "⭐ Proven on GitHub"]),
+      ...loved.slice(6).map(e => [e, "❤️ Loved by the crowd"]), ...loved.slice(0, 6).map(e => [e, "❤️ Loved by the crowd"])]) {
+      if (feats.length < 2 && e.thumb && !seen.has(e.id)) { seen.add(e.id); feats.push(feature(e, eyebrow)); }
+    }
+    $("discover").innerHTML = shelf("❤️ Most loved", loved, "well-received") +
+      (feats.length ? `<section class="shelf-sec"><div class="features">${feats.join("")}</div></section>` : "") +
+      shelf("📈 Rising on GitHub", rising, "", e => `<b class="up">+${num(Math.round(growth(e)))} ★/day</b>`) +
+      shelf("⬆ Just promoted", promoted, "") +
+      shelf("🆕 New this week", newest, "") +
+      shelf("⭐ Proven on GitHub", top(by("proven")), "proven");
+  }
+  $("discover").hidden = !discover;
 
   const rej = [...(INFO.rejected_samples || [])].reverse().slice(0, 30);
   $("rejWrap").hidden = !rej.length;
@@ -319,8 +350,6 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <a class="xshare" href="${esc(xIntent(`📰 This week in clones: ${n.title}`, SITE + "#news=" + n.date))}" target="_blank" rel="noopener">Share on X</a></div>`;
   // The newsletter lives in a drawer, so it never pushes the cards down
   const fresh = issues[0] && Date.now() - Date.parse(issues[0].date + "T12:00:00Z") < 7 * 864e5;
-  $("newsBtn").hidden = !issues.length;
-  if (issues.length) $("newsBtn").innerHTML = `📰 This week: <b>${esc(issues[0].title)}</b>${fresh ? ' <span class="dot" aria-label="new"></span>' : ""}`;
   $("newsDrawer").innerHTML = issues.length ? `<button type="button" class="close" aria-label="Close">×</button>` + issueHtml(issues[0], true) + (issues.length > 1
     ? `<details class="past"><summary>Past issues (${issues.length - 1})</summary>${issues.slice(1).map(n => issueHtml(n, false)).join("")}</details>` : "") : "";
   root.dataset.newsFresh = fresh ? "1" : "";
