@@ -60,6 +60,8 @@ button { font: inherit; color: inherit; }
 .side-h { font-size: 0.72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); padding: 16px 12px 6px; }
 .side-item { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: 10px; background: none; cursor: pointer; font-size: 0.93rem; font-weight: 600; }
 .side-item .emo { font-size: 1.05rem; text-align: center; }
+.side-desc { grid-column: 2 / -1; font-size: 0.76rem; font-weight: 500; line-height: 1.35; color: var(--text-muted); }
+.side-note { display: none; }
 .side-item .n { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); }
 .side-item:hover { background: var(--surface-2); }
 .side-item[aria-pressed="true"] { background: var(--surface); box-shadow: var(--shadow), 0 0 0 1px var(--border); color: var(--rc, var(--accent)); }
@@ -79,7 +81,6 @@ h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; letter-spacing: -0.04
 .see-all:hover { text-decoration: underline; }
 #apps { padding-top: 20px; scroll-margin-top: 90px; }
 #apps .sec-head { margin-bottom: 4px; }
-.list-desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 4px; }
 .selects { display: flex; flex-wrap: wrap; gap: 8px; }
 select { height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; max-width: 100%; }
 
@@ -234,6 +235,8 @@ footer a { text-decoration: none; font-weight: 600; }
   .side-group { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; scrollbar-width: none; }
   .side-group::-webkit-scrollbar { display: none; }
   .side-h { display: none; }
+  .side-desc { display: none; }
+  .side-note { display: block; font-size: 0.8rem; color: var(--text-muted); margin: -2px 2px 4px; }
   .side-item { display: inline-flex; flex: none; width: auto; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 0.84rem; }
   .side-item .emo { font-size: 0.95rem; }
   .side-item[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--ink-text); box-shadow: none; }

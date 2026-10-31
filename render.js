@@ -101,6 +101,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <div class="store">
         <nav class="side" aria-label="Browse">
           <div class="side-group" data-r="side"></div>
+          <p class="side-note" data-r="sideNote" hidden></p>
           <h3 class="side-h" data-r="catsH">Categories</h3>
           <div class="side-group" data-r="cats"></div>
         </nav>
@@ -126,7 +127,6 @@ function renderReport(root, DATA, INFO, opts = {}) {
                 </select>
               </div>
             </div>
-            <p class="list-desc" data-r="listDesc" hidden></p>
             <div class="alt-title" data-r="altTitle" hidden></div>
             <p class="results" data-r="results" hidden></p>
             <ul class="grid rows" data-r="grid"></ul>
@@ -245,12 +245,17 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <span class="f-sum">${esc(e.summary || ofLine(e))}</span></button>`;
 
   // Sidebar: ratings, then categories
-  const side = [["rated", "✨", "Discover", live.filter(e => !unrated(e.reception.verdict)).length, ""], ["all", "🗂", "Everything", live.length, ""],
-    ...RATINGS.map(([v, emo, n, , cls]) => [v, emo, n, by(v).length, cls])];
+  // The chosen one shows a line saying what it means
+  const side = [["all", "🗂", "Everything", live.length, "", "Every clone found, rated or not yet, best first."],
+    ["rated", "✨", "Discover", live.filter(e => !unrated(e.reception.verdict)).length, "", "The highlights: most loved, rising, just promoted, new and proven, then all rated clones."],
+    ...RATINGS.map(([v, emo, n, d, cls]) => [v, emo, n, by(v).length, cls, d])];
   const gone = DATA.length - live.length;
-  if (gone) side.push(["gone", "🗑", "Removed", gone, ""]);
-  $("side").innerHTML = side.map(([v, emo, t, n, cls]) => `<button type="button" class="side-item${cls ? ` r-${cls}` : ""}" data-filter="${v}" aria-pressed="${root._filter === v && (v !== "rated" || !root._cat)}">
-      <span class="emo">${emo}</span><span class="t">${esc(t)}</span><span class="n">${n}</span></button>`).join("");
+  if (gone) side.push(["gone", "🗑", "Removed", gone, "", "Listings whose post or repo was deleted."]);
+  const chosen = side.find(([v]) => v === root._filter && (v !== "rated" || !root._cat));
+  $("side").innerHTML = side.map(([v, emo, t, n, cls, d]) => `<button type="button" class="side-item${cls ? ` r-${cls}` : ""}" data-filter="${v}" aria-pressed="${chosen?.[0] === v}">
+      <span class="emo">${emo}</span><span class="t">${esc(t)}</span><span class="n">${n}</span>${chosen?.[0] === v ? `<small class="side-desc">${esc(d)}</small>` : ""}</button>`).join("");
+  $("sideNote").hidden = !chosen;
+  if (chosen) $("sideNote").textContent = `${chosen[1]} ${chosen[2]}: ${chosen[5]}`;
   const catCount = new Map();
   for (const e of live) if (e.category) catCount.set(e.category, (catCount.get(e.category) || 0) + 1);
   $("catsH").hidden = !catCount.size;
@@ -309,9 +314,6 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const discover = f === "rated" && !root._cat && !q && !pick && !useWant;
   $("title").textContent = root._cat && f === "rated" ? `${CAT_ICON[root._cat] || ""} ${root._cat}` : discover ? "Discover" : `${view[0]} ${view[1]}${root._cat ? ` · ${root._cat}` : ""}`;
   $("listTitle").textContent = discover ? "All rated clones" : q ? "Search results" : `${rows.length} ${rows.length === 1 ? "clone" : "clones"}`;
-  const desc = RATINGS.find(r => r[0] === f);
-  $("listDesc").hidden = !desc || discover;
-  if (desc) $("listDesc").textContent = desc[3];
   if (discover) {
     const top = list => [...list].sort((x, y) => y.reception.score - x.reception.score);
     const loved = top(by("well-received"));
