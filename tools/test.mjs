@@ -7,7 +7,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { X, githubRepo } from "../x.js";
 import { run } from "../pipeline.js";
-import { repoStats } from "../github.js";
+import { repoStats, pickReadmeImage } from "../github.js";
 import { reportHtml } from "../report.js";
 
 const { values: a } = parseArgs({ options: { html: { type: "string" } } });
@@ -104,9 +104,15 @@ assert.equal(partial.downloads, 5);
 assert.equal(partial.stars, 7);
 globalThis.fetch = realFetch;
 
+// README screenshots: badges, logos and avatars are skipped; relative paths become raw URLs
+assert.equal(pickReadmeImage('<img src="./logo.svg"> ![b](https://img.shields.io/x) ![Title](docs/shot.png)', "a/b"), "https://raw.githubusercontent.com/a/b/HEAD/docs/shot.png");
+assert.equal(pickReadmeImage("![x](https://github.com/a/b/blob/main/s.png)", "a/b"), "https://raw.githubusercontent.com/a/b/main/s.png");
+assert.equal(pickReadmeImage("no images here", "a/b"), null);
+
 // Run 1
 const x = new X("token", log, { maxReads: 2000 });
-const r1 = await run(null, { perQuery: 50, productsPerRun: 1 }, { x, haiku, githubStats, log, now: T0 });
+const githubImage = async repo => repo === "alice/webshop" ? "https://raw.githubusercontent.com/alice/webshop/HEAD/shot.png" : null;
+const r1 = await run(null, { perQuery: 50, productsPerRun: 1 }, { x, haiku, githubStats, githubImage, log, now: T0 });
 const by = (r, id) => r.results.find(e => e.id === id);
 assert.equal(r1.results.length, 4, "the non-clone is rejected");
 assert.ok(r1.info.rejected.includes("p5"));
@@ -115,6 +121,7 @@ assert.equal(by(r1, "p1").product.name, "Photoshop");
 assert.equal(by(r1, "p2").reception.verdict, "unconfirmed");
 assert.equal(by(r1, "p3").reception.verdict, "stay-away");
 assert.equal(by(r1, "p4").reception.verdict, "too-early");
+assert.equal(by(r1, "p1").github.image, "https://raw.githubusercontent.com/alice/webshop/HEAD/shot.png");
 assert.equal(by(r1, "p1").sentiment.sampled, 12, "the author's own reply isn't counted");
 assert.ok(by(r1, "p1").reception.score > by(r1, "p3").reception.score);
 const firstReads = x.reads;
@@ -123,11 +130,12 @@ const firstReads = x.reads;
 deleted = new Set(["p3"]);
 stars = { ...stars, "alice/webshop": 3500 };
 const x2 = new X("token", log, { maxReads: 2000 });
-const r2 = await run({ ...r1, info: { ...r1.info } }, { perQuery: 50, productsPerRun: 1, rotate: 1 }, { x: x2, haiku, githubStats, log, now: T0 + 48 * H });
+const r2 = await run({ ...r1, info: { ...r1.info } }, { perQuery: 50, productsPerRun: 1, rotate: 1 }, { x: x2, haiku, githubStats, githubImage, log, now: T0 + 48 * H });
 assert.equal(r2.results.length, 4, "nothing is dropped");
 assert.equal(by(r2, "p3").status, "gone");
 assert.equal(by(r2, "p3").text, "", "removed posts lose their text");
 assert.equal(by(r2, "p1").github.stars_history.length, 2);
+assert.ok(by(r2, "p1").github.image, "the screenshot survives the next GitHub check");
 assert.ok(by(r2, "p1").snapshots["24h"], "24h checkpoint recorded");
 assert.ok(x2.reads < firstReads, "known posts aren't searched again");
 assert.equal(by(r2, "p1").history.length, 1, "a rating that doesn't change isn't repeated in the history");

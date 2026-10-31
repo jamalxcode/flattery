@@ -11,7 +11,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { X } from "../x.js";
 import { Haiku } from "../haiku.js";
-import { repoStats } from "../github.js";
+import { repoStats, readmeImage } from "../github.js";
 import { run } from "../pipeline.js";
 import { reportHtml } from "../report.js";
 
@@ -57,6 +57,7 @@ const { results, info: runInfo } = await run(prev, {
   backfillPerQuery: +a["backfill-per-query"],
 }, {
   x, haiku, log,
+  githubImage: readmeImage,
   githubStats: names => ghToken ? repoStats(ghToken, names, log) : (log("no GITHUB_TOKEN, skipping GitHub checks", "warn"), new Map()),
 });
 

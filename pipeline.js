@@ -28,7 +28,7 @@ const WEEK = 7 * 864e5;
 
 const iso = t => new Date(t).toISOString().replace(/\.\d+Z$/, "Z");
 
-export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.now() }) {
+export async function run(prev, opts, { x, haiku, githubStats, githubImage, log, now = Date.now() }) {
   const nowIso = iso(now), today = nowIso.slice(0, 10);
   const ageH = e => (now - Date.parse(e.created_at)) / 36e5;
   const outOfTime = () => opts.deadline && Date.now() > opts.deadline;
@@ -204,11 +204,29 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
       if (!st) continue;
       if (st.status === "gone") { e.github = { ...e.github, status: "gone", reason: st.reason, checked: nowIso }; continue; }
       const history = (e.github?.stars_history || []).filter(h => h.at.slice(0, 10) !== today);
-      e.github = { ...st, checked: nowIso, stars_history: [...history, { at: nowIso, stars: st.stars }].slice(-30) };
+      const { image, image_checked } = e.github || {};
+      e.github = { ...st, checked: nowIso, stars_history: [...history, { at: nowIso, stars: st.stars }].slice(-30), image, image_checked };
       if (st.repo !== e.repo) { e.previous_repo = e.repo; e.repo = st.repo; }
     }
     counts.repos = stats.size;
     log(`github: ${stats.size} of ${names.length} repos checked`);
+  }
+
+  // Card pictures: the first real image in each repo's README, looked up weekly
+  if (githubImage) {
+    const want = linked.filter(e => e.github && e.github.status !== "gone" &&
+      (!e.github.image_checked || now - Date.parse(e.github.image_checked) > WEEK)).slice(0, opts.maxImages ?? 40);
+    let found = 0;
+    for (let i = 0; i < want.length; i += 8) {
+      await Promise.all(want.slice(i, i + 8).map(async e => {
+        const img = await githubImage(e.repo);
+        if (img === undefined) return; // README unreachable: try again next run
+        e.github.image = img;
+        e.github.image_checked = nowIso;
+        if (img) found++;
+      }));
+    }
+    if (want.length) log(`images: ${found} of ${want.length} READMEs had a screenshot`);
   }
 
   // 6. Score
