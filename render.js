@@ -61,6 +61,27 @@ function renderReport(root, DATA, INFO, opts = {}) {
     if (!u) return "";
     return `<p class="use">${u.ready === "install" ? `⬇ ${u.platforms.join(" · ")}` : u.ready === "online" ? "🌐 Try online" : "📦 Source only"}${!u.licensed ? ' <span class="warn" title="No license: you may not be allowed to use it">⚠ no license</span>' : ""}${u.alive === "abandoned" ? ' <span class="dead">🪦 abandoned</span>' : ""}</p>`;
   };
+  // The visitor's system, for the Get button
+  const OS = (() => {
+    if (typeof navigator === "undefined") return "";
+    const ua = navigator.userAgent || "", pf = navigator.userAgentData?.platform || navigator.platform || "";
+    if (/android/i.test(ua)) return "Android";
+    if (/iphone|ipad|ipod/i.test(ua) || (/mac/i.test(pf) && navigator.maxTouchPoints > 1)) return "iOS";
+    if (/mac/i.test(pf) || /Mac OS X/.test(ua)) return "Mac";
+    if (/win/i.test(pf) || /Windows/.test(ua)) return "Windows";
+    if (/linux|cros/i.test(pf + ua)) return "Linux";
+    return "";
+  })();
+  // Get: the installer for this system from the newest release; Open: the project's web app.
+  // Never for Don't touch.
+  const getLink = e => {
+    if (e.reception?.verdict === "stay-away") return null;
+    const u = usable(e);
+    if (!u) return null;
+    if (OS && e.github.get?.[OS]) return { label: "Get", long: `Get for ${OS}`, url: e.github.get[OS], title: `Download for ${OS} from the project's GitHub releases` };
+    if (u.homepage) return { label: "Open", long: "Open the web app", url: u.homepage, title: "Open it in your browser" };
+    return null;
+  };
   const OF = { clone: "Clone of", "reverse-engineered": "Reverse-engineered", reimagined: "Reimagined", port: "Port of" };
   const ofLine = e => what(e) ? `${OF[e.kind] || "Clone of"} ${what(e)}` : (e.kind || "clone");
   const hue = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
@@ -104,6 +125,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <p class="side-note" data-r="sideNote" hidden></p>
           <h3 class="side-h" data-r="catsH">Categories</h3>
           <div class="side-group" data-r="cats"></div>
+          <a class="suggest" href="${esc(xIntent("Flattery is missing a clone: <link to the X post or the GitHub repo> #FlatteryAdd", SITE))}" target="_blank" rel="noopener" data-goat="suggest">＋ Suggest a clone on X</a>
         </nav>
         <div class="store-main">
           <header class="store-head">
@@ -211,6 +233,9 @@ function renderReport(root, DATA, INFO, opts = {}) {
     return days >= 0.9 && e.reception.repo_counted ? (h.at(-1).stars - h[0].stars) / days : 0;
   };
   const counted = e => e.github && e.github.status !== "gone" && e.reception.repo_counted !== false;
+  // The project's logo or its organisation's avatar when there is one, over its initials
+  const icon = (e, cls = "icon") => `<div class="${cls}" style="--h:${hue(name(e))}" aria-hidden="true">${esc(initials(name(e)))}${e.icon
+    ? `<img src="${esc((opts.base || "") + e.icon)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>`;
   const row = (e, note) => {
     const [, emo, rname, , cls] = rating(e.reception.verdict);
     const u = usable(e), m = moved(e);
@@ -227,13 +252,15 @@ function renderReport(root, DATA, INFO, opts = {}) {
       price(e) ? `<span class="save">saves ~$${price(e)}/yr</span>` : "",
     ].filter(Boolean);
     return `<li><article class="card r-${cls}${e.status === "gone" ? " gone" : ""}">
-      <div class="icon" style="--h:${hue(name(e))}" aria-hidden="true">${esc(initials(name(e)))}</div>
+      ${icon(e)}
       <div class="card-body">
         <h3><button type="button" data-open="${esc(e.id)}">${esc(name(e))}</button></h3>
         <p class="of">${esc(ofLine(e))}</p>
         <p class="meta">${bits.join('<span class="sep">·</span>')}</p>
       </div>
-      <div class="get"><span class="pill" title="${esc(rname)}, score ${e.reception.score}">${emo} ${e.reception.score}</span><small>${esc(rname)}</small></div>
+      <div class="get"><span class="pill" title="${esc(rname)}, score ${e.reception.score}">${emo} ${e.reception.score}</span>${(g => g
+        ? `<a class="get-btn" href="${esc(g.url)}" target="_blank" rel="noopener nofollow" title="${esc(g.title)}" data-goat="${g.label === "Get" ? "get" : "open"}">${g.label}</a>`
+        : `<small>${esc(rname)}</small>`)(getLink(e))}</div>
     </article></li>`;
   };
   const shelf = (title, list, filter, note) => list.length ? `<section class="shelf-sec">
@@ -300,7 +327,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
     $("altTitle").innerHTML = `<h2>Free alternatives to ${esc(pick)}</h2><p>${rows.length} ${rows.length === 1 ? "clone" : "clones"} found online, rated by the crowd and checked on GitHub${p ? `, each saving about $${p} a year` : ""}. Best rated first.</p>`;
   }
   const sorts = {
-    score: e => e.reception.score - (e.reception.verdict === "stay-away" ? 1000 : 0), likes: e => e.metrics.likes,
+    score: e => e.reception.score - (e.reception.verdict === "stay-away" ? 1000 : unrated(e.reception.verdict) ? 500 : 0), likes: e => e.metrics.likes,
     stars: e => e.github?.stars ?? -1, downloads: e => e.github?.downloads ?? -1, newest: e => Date.parse(e.created_at),
   };
   const key = $("sort").value;
@@ -312,6 +339,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   // Titles: the view's name on top, and on Discover a few shelves above the full list
   const view = f === "rated" ? ["✨", "Discover"] : f === "all" ? ["🗂", "Everything"] : f === "gone" ? ["🗑", "Removed"] : rating(f).slice(1, 3);
   const discover = f === "rated" && !root._cat && !q && !pick && !useWant;
+  root.querySelector(".store-head").classList.toggle("discover", discover);
   $("title").textContent = root._cat && f === "rated" ? `${CAT_ICON[root._cat] || ""} ${root._cat}` : discover ? "Discover" : `${view[0]} ${view[1]}${root._cat ? ` · ${root._cat}` : ""}`;
   $("listTitle").textContent = discover ? "All rated clones" : q ? "Search results" : `${rows.length} ${rows.length === 1 ? "clone" : "clones"}`;
   if (discover) {
@@ -404,52 +432,60 @@ function renderReport(root, DATA, INFO, opts = {}) {
       const fig = (v, t) => `<div><b>${v}</b><small>${t}</small></div>`;
       const sheet = $("sheet");
       sheet.className = `sheet r-${cls}`;
+      const get = getLink(e);
+      const u = usable(e);
+      const otherGets = u && e.github.get ? Object.entries(e.github.get).filter(([os]) => os !== OS) : [];
+      const xFig = `<div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div>`;
+      // Laid out like an app store page: picture, name, Get, rating, can I use it, what people
+      // said; the evidence behind the rating folds under Details
       sheet.innerHTML = `
         <button type="button" class="close" aria-label="Close">×</button>
         <div class="art">${art(e)}</div>
         <div class="sheet-body">
-          <div><h2>${esc(name(e))}</h2><p class="of">${esc(ofLine(e))}</p></div>
+          <div class="sheet-head">${icon(e, "icon big")}<div><h2>${esc(name(e))}</h2><p class="of">${esc(ofLine(e))}${price(e) ? ` <span class="save">saves ~$${price(e)}/yr</span>` : ""}</p></div></div>
+          <div class="actions">
+            ${get ? `<a class="primary" href="${esc(get.url)}" target="_blank" rel="noopener nofollow" title="${esc(get.title)}" data-goat="${get.label === "Get" ? "get" : "open"}">${esc(get.long)}</a>` : ""}
+            ${e.repo && cls !== "danger" ? `<a${get ? "" : ' class="primary"'} href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener" data-goat="github">View on GitHub</a>` : ""}
+            <a${get || (e.repo && cls !== "danger") ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener" data-goat="post">The post on ${src(e)}</a>
+            ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow" data-goat="github">☠️ Repo (don't run it)</a>` : ""}
+            <a href="${esc(pageUrl(e))}" data-share="${esc(e.id)}" data-url="${esc(pageUrl(e))}" data-goat="copy-link" onclick="event.preventDefault()">Copy link</a>
+            <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="share-x">Share on X</a>
+          </div>
           <div class="verdict"><span class="emo">${emo}</span><span><b>${rname}</b><small>${rdesc}</small></span>
             <span class="big">${e.reception.score}<small>score</small></span></div>
-          ${(e.history || []).length > 1 ? `<p class="note-small">Rating history: ${e.history.map(x => `${rating(x.verdict)[1]} ${esc(x.at.slice(5))}`).join(" → ")}</p>` : ""}
           ${e.summary ? `<p>${esc(e.summary)}</p>` : ""}
-          <div class="actions">
-            ${e.repo && cls !== "danger" ? `<a class="primary" href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
-            <a${e.repo && cls !== "danger" ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener">Open the post on ${src(e)}</a>
-            ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow">☠️ Repo (don't run it)</a>` : ""}
-            ${altUrl(e) ? `<a href="${esc(altUrl(e))}">All ${esc(what(e))} alternatives</a>` : ""}
-            <a href="${esc(pageUrl(e))}" data-share="${esc(e.id)}" data-url="${esc(pageUrl(e))}" onclick="event.preventDefault()">Copy link</a>
-            <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, pageUrl(e)))}" target="_blank" rel="noopener">Share on X</a>
-          </div>
-          ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>${src(e) === "X" ? `@${esc(e.author.username)} · ${num(e.author.followers)} followers` : `${esc(e.author.username)} on ${src(e)}`} · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
-          ${e.group ? `<div><h4>${e.posts.length} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
-            <a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc((p.created_at || "").slice(0, 10))}</span>
-            <small>${esc(p.text) || "removed"}</small></li>`).join("")}</ul></div>` : ""}
-          <div><h4>On X${e.group ? " · all posts" : ""}</h4><div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div></div>
-          ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes${e.reception.confidence === "low" ? ' · <span class="low">low confidence</span>' : ""}</h4>${mini(s)}
-            <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
           ${s?.flags?.length ? `<div><h4>What people on ${src(e)} raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div>
             ${Object.entries(s.evidence || {}).length ? `<ul class="posts evidence">${Object.entries(s.evidence).flatMap(([fl, list]) => list.map(r => `<li>
               <span class="chip flag">${esc(fl.replaceAll("-", " "))}</span> <a href="${esc(r.url)}" target="_blank" rel="noopener">@${esc(r.author)}</a>
               <small>${esc(r.text)}</small></li>`)).join("")}</ul>` : ""}</div>` : ""}
-          ${(u => u ? `<div class="canuse"><h4>Can I use it?</h4><ul>
-            <li>${u.ready === "install" ? `✅ Installers for ${esc(u.platforms.join(", "))} in its releases` : u.ready === "online" ? `🌐 Runs online: <a href="${esc(u.homepage)}" target="_blank" rel="noopener nofollow">${esc(u.homepage.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "📦 Source code only: you'd build it yourself"}${u.homepage && u.ready === "install" ? ` · <a href="${esc(u.homepage)}" target="_blank" rel="noopener nofollow">website</a>` : ""}</li>
+          ${u ? `<div class="canuse"><h4>Can I use it?</h4><ul>
+            <li>${u.ready === "install" ? `✅ Installers for ${esc(u.platforms.join(", "))}${otherGets.length ? `: ${otherGets.map(([os, url]) => `<a href="${esc(url)}" target="_blank" rel="noopener nofollow" data-goat="get">${esc(os)}</a>`).join(" · ")}` : ""}` : u.ready === "online" ? `🌐 Runs online: <a href="${esc(u.homepage)}" target="_blank" rel="noopener nofollow" data-goat="open">${esc(u.homepage.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "📦 Source code only: you'd build it yourself"}${u.homepage && u.ready === "install" ? ` · <a href="${esc(u.homepage)}" target="_blank" rel="noopener nofollow" data-goat="open">website</a>` : ""}</li>
             <li>${u.licensed ? `✅ License: ${esc(e.github.license)}` : "⚠️ No license: by default nobody else may use, copy or change it"}</li>
             <li>${u.alive === "abandoned" ? `🪦 Looks abandoned: no changes for ${Math.round(u.days)} days${e.github.status === "archived" ? " (archived)" : ""}` : u.alive === "active" ? `✅ Maintained${u.commits ? `: ${u.commits} commits in the last 30 days` : ""}` : `⏸ Quiet lately: last change ${Math.round(u.days)} days ago`}</li>
-          </ul></div>` : "")(usable(e))}
-          ${g ? `<div><h4>On GitHub · ${esc(e.repo)}</h4>${e.reception.repo_counted === false ? `<p class="note-small" style="margin-bottom:8px">This repo isn't the poster's own, so its stars and downloads don't count toward the rating.</p>` : ""}<div class="figures">${fig(num(g.stars), "stars")}${fig(num(g.forks), "forks")}${fig(num(g.downloads), "downloads")}${growth != null ? fig((growth >= 0 ? "+" : "") + num(growth), "stars a day") : ""}${fig(esc(g.license || "none"), "license")}</div>
-            ${g.status === "archived" ? '<p class="note-small">This repo is archived.</p>' : ""}</div>`
-            : `<p class="note-small">${e.repo ? "The linked repo was removed." : "No GitHub repo linked yet, so it can't be confirmed."}</p>`}
-          ${e.reception.reasons.length ? `<div class="chips">${e.reception.reasons.map(r => `<span class="chip">${esc(r)}</span>`).join("")}</div>` : ""}
+          </ul></div>` : `<p class="note-small">${e.repo ? (g ? "This repo isn't the poster's own, so it isn't checked for installers." : "The linked repo was removed.") : "No GitHub repo linked yet, so it can't be installed or confirmed."}</p>`}
+          ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes${e.reception.confidence === "low" ? ' · <span class="low">low confidence</span>' : ""}</h4>${mini(s)}
+            <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
+          ${e.second_opinion ? `<p class="note-small">🔎 Second opinion (Claude Sonnet): ${e.second_opinion.agree ? "agrees" : "disagrees, so it's shown as Mixed"}. ${esc(e.second_opinion.note)}</p>` : ""}
           <div class="object"><h4>Tried it?</h4>
             <p class="note-small">Tell everyone on X whether it works. Each account counts once.${e.trials ? ` So far: <b>✅ ${e.trials.works} works · ❌ ${e.trials.broken} broken</b>.` : ""}</p>
-            <a class="xobject" href="${esc(xIntent(`I tried ${name(e)}${what(e) ? ` (≈ ${what(e)})` : ""} and it works ✅ #FlatteryWorks ${e.code || ""}`, pageUrl(e)))}" target="_blank" rel="noopener">✅ It works</a>
-            <a class="xobject" href="${esc(xIntent(`I tried ${name(e)}${what(e) ? ` (≈ ${what(e)})` : ""} and it's broken ❌ #FlatteryBroken ${e.code || ""}`, pageUrl(e)))}" target="_blank" rel="noopener">❌ It's broken</a></div>
+            <a class="xobject" href="${esc(xIntent(`I tried ${name(e)}${what(e) ? ` (≈ ${what(e)})` : ""} and it works ✅ #FlatteryWorks ${e.code || ""}`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="works">✅ It works</a>
+            <a class="xobject" href="${esc(xIntent(`I tried ${name(e)}${what(e) ? ` (≈ ${what(e)})` : ""} and it's broken ❌ #FlatteryBroken ${e.code || ""}`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="broken">❌ It's broken</a></div>
+          <details class="more"><summary>Details: posts, numbers and how it was scored</summary><div class="more-body">
+            ${altUrl(e) ? `<p><a href="${esc(altUrl(e))}">All ${esc(what(e))} alternatives →</a></p>` : ""}
+            ${(e.history || []).length > 1 ? `<p class="note-small">Rating history: ${e.history.map(x => `${rating(x.verdict)[1]} ${esc(x.at.slice(5))}`).join(" → ")}</p>` : ""}
+            ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>${src(e) === "X" ? `@${esc(e.author.username)} · ${num(e.author.followers)} followers` : `${esc(e.author.username)} on ${src(e)}`} · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
+            ${e.group ? `<div><h4>${e.posts.length} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
+              <a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc((p.created_at || "").slice(0, 10))}</span>
+              <small>${esc(p.text) || "removed"}</small></li>`).join("")}</ul></div>` : ""}
+            <div><h4>On ${src(e)}${e.group ? " · all posts" : ""}</h4>${xFig}</div>
+            ${g ? `<div><h4>On GitHub · ${esc(e.repo)}</h4>${e.reception.repo_counted === false ? `<p class="note-small" style="margin-bottom:8px">This repo isn't the poster's own, so its stars and downloads don't count toward the rating.</p>` : ""}<div class="figures">${fig(num(g.stars), "stars")}${fig(num(g.forks), "forks")}${fig(num(g.downloads), "downloads")}${growth != null ? fig((growth >= 0 ? "+" : "") + num(growth), "stars a day") : ""}${fig(esc(g.license || "none"), "license")}</div>
+              ${g.status === "archived" ? '<p class="note-small">This repo is archived.</p>' : ""}</div>` : ""}
+            ${e.reception.reasons.length ? `<div class="chips">${e.reception.reasons.map(r => `<span class="chip">${esc(r)}</span>`).join("")}</div>` : ""}
+            <p class="note-small">Score parts: ${Object.entries(e.reception.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}. Crowd opinion, not a legal or technical judgement.</p>
+          </div></details>
           <div class="object"><h4>Is this listing wrong?</h4>
             <p class="note-small">Post an objection on X with your reason. When six or more established accounts object for real reasons, spread over at least two hours, the listing comes down by itself.${e.objections ? ` <b>⚑ ${e.objections} of 6 counted so far.</b>` : ""}</p>
-            <a class="xobject" href="${esc(xIntent(`Please remove "${name(e)}" from Flattery (flattery.sala.company): <your reason> #FlatteryRemove ${e.code || ""}`))}" target="_blank" rel="noopener">⚑ Object on X</a></div>
-          ${e.second_opinion ? `<p class="note-small">🔎 Second opinion (Claude Sonnet): ${e.second_opinion.agree ? "agrees" : "disagrees, so it's shown as Mixed"}. ${esc(e.second_opinion.note)}</p>` : ""}
-          <p class="note-small">Score parts: ${Object.entries(e.reception.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}. Crowd opinion, not a legal or technical judgement.</p>
+            <a class="xobject" href="${esc(xIntent(`Please remove "${name(e)}" from Flattery (flattery.sala.company): <your reason> #FlatteryRemove ${e.code || ""}`))}" target="_blank" rel="noopener" data-goat="object">⚑ Object on X</a></div>
         </div>`;
       if (!sheet.open) sheet.showModal();
       if (location.protocol !== "file:" && !window.FLATTERY_OPEN) history.replaceState(null, "", "#p=" + encodeURIComponent(id));

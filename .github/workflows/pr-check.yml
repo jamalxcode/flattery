@@ -1,0 +1,26 @@
+# Checks every pull request before it's merged: the offline tests, then the page itself in a
+# real browser with the real catalog (tools/ui-check.mjs), so a broken page never goes live.
+name: Check pull request
+on:
+  pull_request:
+    branches: [main]
+permissions: { contents: read }
+concurrency: { group: "pr-${{ github.event.pull_request.number }}", cancel-in-progress: true }
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Offline tests
+        run: npm test
+      - name: Copy of the catalog from the data branch
+        run: |
+          git fetch --depth 1 origin data
+          mkdir -p data && git archive origin/data latest.json thumbs | tar -x -C data
+      - name: Page check in a browser
+        run: |
+          npx playwright install --with-deps chromium >/dev/null
+          node tools/ui-check.mjs

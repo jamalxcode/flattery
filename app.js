@@ -21,7 +21,25 @@ themeBtn.addEventListener("click", () => {
 // Surprise me: a random loved clone, or any rated one when none are loved yet
 // How the ratings work: a drawer, like the newsletter
 const about = $("about");
-$("about-btn").addEventListener("click", () => { about.showModal(); about.scrollTop = 0; });
+const showAbout = () => { if (!about.open) about.showModal(); about.scrollTop = 0; };
+$("about-btn").addEventListener("click", showAbout);
+// The phone menu (⋯): closes after a choice
+const menu = document.querySelector(".more-menu");
+menu?.addEventListener("click", ev => {
+  if (ev.target.closest("[data-about]")) showAbout();
+  if (ev.target.closest(".menu a, .menu button")) menu.open = false;
+});
+document.addEventListener("click", ev => { if (menu?.open && !menu.contains(ev.target)) menu.open = false; });
+
+// Usage counts (GoatCounter events): which buttons, filters and links people actually use
+const goat = name => { try { window.goatcounter?.count?.({ path: "flattery-" + name, title: name, event: true }); } catch {} };
+document.addEventListener("click", ev => {
+  const el = ev.target.closest("[data-goat], [data-filter], [data-cat], [data-open]");
+  if (!el) return;
+  goat(el.dataset.goat || (el.dataset.filter ? "filter-" + el.dataset.filter : el.dataset.cat != null ? "category-" + (el.dataset.cat || "all") : "open-project"));
+}, true);
+let searchTimer;
+$("search").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => $("search").value.trim() && goat("search"), 1500); });
 about.addEventListener("click", ev => { if (ev.target === about || ev.target.closest(".close")) about.close(); });
 
 $("news-btn").addEventListener("click", () => $("live").flattery?.news());

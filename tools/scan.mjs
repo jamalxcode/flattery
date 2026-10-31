@@ -18,6 +18,7 @@ import { repoStats, readmeImage } from "../github.js";
 import { run } from "../pipeline.js";
 import { makeSources } from "../sources.js";
 import { reportHtml } from "../report.js";
+import { makePoster, postsToMake } from "../xpost.js";
 
 const root = new URL("../", import.meta.url);
 const { values: a } = parseArgs({
@@ -95,26 +96,36 @@ const thumbDir = `${a.out}/thumbs`;
 await mkdir(thumbDir, { recursive: true });
 const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
 let newThumbs = 0;
-const wantThumbs = groups.filter(g => g.github?.image && g.github.status !== "gone");
+// Copies an image into thumbs/ once (named by its URL's hash): returns its path, or null
+const store = async (url, maxBytes) => {
+  const base = createHash("sha1").update(url).digest("hex").slice(0, 16);
+  const have = Object.values(EXT).map(x => `${base}.${x}`).find(f => existsSync(`${thumbDir}/${f}`));
+  if (have) return `thumbs/${have}`;
+  if (newThumbs >= 80) return null;
+  newThumbs++;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    // No SVG: an SVG served from the site's own domain could run scripts when opened directly
+    const ext = EXT[(res.headers.get("content-type") || "").split(";")[0].trim()];
+    if (!res.ok || !ext) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > maxBytes) return null;
+    await writeFile(`${thumbDir}/${base}.${ext}`, buf);
+    return `thumbs/${base}.${ext}`;
+  } catch { return null; }
+};
+const wantThumbs = groups.filter(g => g.github && g.github.status !== "gone" && (g.github.image || g.github.logo || g.github.org_avatar));
 for (let i = 0; i < wantThumbs.length; i += 6) {
   await Promise.all(wantThumbs.slice(i, i + 6).map(async g => {
-    const base = createHash("sha1").update(g.github.image).digest("hex").slice(0, 16);
-    const have = Object.values(EXT).map(x => `${base}.${x}`).find(f => existsSync(`${thumbDir}/${f}`));
-    if (have) return void (g.thumb = `thumbs/${have}`);
-    if (newThumbs >= 40) return;
-    newThumbs++;
-    try {
-      const res = await fetch(g.github.image, { signal: AbortSignal.timeout(15000) });
-      const ext = EXT[(res.headers.get("content-type") || "").split(";")[0].trim()];
-      if (!res.ok || !ext) return;
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length > 2.5e6) return; // too big for a card picture
-      await writeFile(`${thumbDir}/${base}.${ext}`, buf);
-      g.thumb = `thumbs/${base}.${ext}`;
-    } catch {}
+    if (g.github.image) { const t = await store(g.github.image, 2.5e6); if (t) g.thumb = t; }
+    // The row's icon: the README's logo, else the organisation's avatar
+    for (const src of [g.github.logo, g.github.org_avatar].filter(Boolean)) {
+      const t = await store(src, 6e5);
+      if (t) { g.icon = t; break; }
+    }
   }));
 }
-log(`thumbnails: ${groups.filter(g => g.thumb).length} stored, ${newThumbs} fetched this run`);
+log(`thumbnails: ${groups.filter(g => g.thumb).length} pictures and ${groups.filter(g => g.icon).length} icons stored, ${newThumbs} fetched this run`);
 
 const now = new Date();
 const costPerRead = +(process.env.X_COST_PER_READ || 0);
@@ -125,6 +136,18 @@ const info = {
   run: { ...runInfo.counts, x_reads: x.reads, ...(costPerRead && { x_cost_usd: Math.round(x.reads * costPerRead * 100) / 100 }), x_calls: x.calls, haiku_calls: haiku.calls, haiku_tokens: haiku.tokens, seconds: Math.round((Date.now() - t0) / 1000) },
 };
 delete info.counts;
+// Posts on X as the Flattery account (only with posting keys): the newsletter and newly loved
+// projects, each once, each linking to the site
+info.posted = { ...(prev?.info?.source === "x" ? prev.info.posted : {}) };
+const poster = makePoster(process.env, log);
+if (poster) {
+  for (const p of postsToMake(groups, info, info.posted, { today: info.generated_iso.slice(0, 10) })) {
+    const id = await poster.post(p.text);
+    if (id) { info.posted[p.key] = info.generated_iso.slice(0, 10); log(`posted on X: ${p.key}`); }
+  }
+}
+// Keep the record small: the last 300 posts
+info.posted = Object.fromEntries(Object.entries(info.posted).slice(-300));
 info.month = { key: month, reads: usedThisMonth + x.reads, cap: monthCap };
 // Status for the page: the last 60 runs
 info.status = [...(prev?.info?.source === "x" ? prev.info.status || [] : []),
@@ -132,7 +155,7 @@ info.status = [...(prev?.info?.source === "x" ? prev.info.status || [] : []),
 await mkdir(a.out, { recursive: true });
 await writeFile(`${a.out}/latest.json`, JSON.stringify({ info, results, groups }));
 const [css, renderJs, index] = await Promise.all(["style.css", "render.js", "index.html"].map(f => readFile(new URL(f, root), "utf8")));
-const noteHtml = index.match(/<section class="about">([\s\S]*?)<\/section>/)?.[1] || "";
+const noteHtml = (index.match(/<dialog class="drawer about"[^>]*>([\s\S]*?)<\/dialog>/)?.[1] || "").replace(/<button[^>]*class="close"[^>]*>.*?<\/button>/, "");
 await writeFile(`${a.out}/latest.html`, reportHtml({ css, renderJs, noteHtml, results: groups, info }));
 
 // RSS: newly rated and newly promoted projects of the last two weeks

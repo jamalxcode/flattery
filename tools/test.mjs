@@ -7,7 +7,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { X, githubRepo } from "../x.js";
 import { run } from "../pipeline.js";
-import { repoStats, pickReadmeImage } from "../github.js";
+import { repoStats, pickReadmeImage, pickReadmeLogo, downloadsOf } from "../github.js";
+import { oauthHeader, postsToMake } from "../xpost.js";
+import { parseAdd } from "../complaints.js";
 import { reportHtml } from "../report.js";
 import { score } from "../reception.js";
 import { buildGroups } from "../groups.js";
@@ -119,6 +121,26 @@ globalThis.fetch = realFetch;
 assert.equal(pickReadmeImage('<img src="./logo.svg"> ![b](https://img.shields.io/x) ![Title](docs/shot.png)', "a/b"), "https://raw.githubusercontent.com/a/b/HEAD/docs/shot.png");
 assert.equal(pickReadmeImage("![x](https://github.com/a/b/blob/main/s.png)", "a/b"), "https://raw.githubusercontent.com/a/b/main/s.png");
 assert.equal(pickReadmeImage("no images here", "a/b"), null);
+// Icons, downloads, suggestions and posting
+assert.equal(pickReadmeLogo('<p align="center"><img src="assets/logo.png" width="120"></p> ![shot](docs/shot.png)', "a/b"), "https://raw.githubusercontent.com/a/b/HEAD/assets/logo.png");
+assert.equal(pickReadmeLogo('![b](https://img.shields.io/x) ![shot](docs/shot.png)', "a/b"), null);
+assert.deepEqual(downloadsOf([{ releaseAssets: { nodes: [
+  { name: "App-1.0-x64.dmg", browserDownloadUrl: "u/x64.dmg" }, { name: "App-1.0-arm64.dmg", browserDownloadUrl: "u/arm.dmg" },
+  { name: "App-Setup.exe", browserDownloadUrl: "u/setup.exe" }, { name: "App.exe.sha256", browserDownloadUrl: "u/sum" },
+  { name: "app.AppImage", browserDownloadUrl: "u/app.AppImage" }] } }]), { Mac: "u/arm.dmg", Windows: "u/setup.exe", Linux: "u/app.AppImage" });
+assert.deepEqual(parseAdd({ id: "9", urls: ["https://x.com/bob/status/123", "https://github.com/a/b"], repos: ["a/b"] }), { ids: ["123"], repos: ["a/b"] });
+// X's documented OAuth 1.0a example
+assert.match(oauthHeader("POST", "https://api.twitter.com/1.1/statuses/update.json?include_entities=true&status=" + encodeURIComponent("Hello Ladies + Gentlemen, a signed OAuth request!").replace(/!/g, "%21"),
+  { apiKey: "xvz1evFS4wEEPTGEFPHBog", apiSecret: "kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw", accessToken: "370773112-GmHxMAgYyLbNEtIKZeRNFsMKPR9EyMZeS9weJAEb", accessSecret: "LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE" },
+  { nonce: "kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg", timestamp: 1318622958 }), /oauth_signature="hCtSmYh%2BiHYCEqBWrE7C7hYmtUk%3D"/);
+{
+  const g = { id: "g1", code: "frabcde", status: "ok", project: "PhotoCraft", original_clean: "Adobe Photoshop", summary: "A free photo editor.",
+    reception: { verdict: "well-received", score: 80, repo_counted: true }, github: { stars: 75400 }, history: [{ at: "2026-10-31", verdict: "well-received" }] };
+  const todo = postsToMake([g], { newsletter: [{ date: "2026-10-27", title: "Big week", items: [{ name: "PhotoCraft" }] }] }, {}, { today: "2026-10-31" });
+  assert.deepEqual(todo.map(t => t.key), ["news:2026-10-27", "loved:g1"]);
+  assert.ok(todo.every(t => t.text.includes("flattery.sala.company") && t.text.length <= 300));
+  assert.equal(postsToMake([g], {}, { "loved:g1": "2026-10-31" }, { today: "2026-10-31" }).length, 0);
+}
 
 // GitHub takes priority: a huge repo behind a tiny X post is loved; a scam flag still wins
 const small = { created_at: new Date(T0 - 72 * H).toISOString(), author: { username: "ChrisTitusTech", followers: 100 }, repo: "ChrisTitusTech/winutil",

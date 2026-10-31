@@ -13,6 +13,8 @@
 # Secrets (Settings → Secrets and variables → Actions):
 #   X_BEARER_TOKEN     X API app bearer token
 #   ANTHROPIC_API_KEY  for Claude Haiku (triage and reply sentiment)
+#   X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET  (optional) post the newsletter and
+#                      newly loved projects on X as the Flattery account; without them nothing is posted
 # Without them the scan fails and the previous catalog is republished.
 #
 # Timer: cron-job.org can start this through GitHub's API (POST
@@ -79,6 +81,10 @@ jobs:
         env:
           X_BEARER_TOKEN: "${{ secrets.X_BEARER_TOKEN }}"
           ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}"
+          X_API_KEY: "${{ secrets.X_API_KEY }}"
+          X_API_SECRET: "${{ secrets.X_API_SECRET }}"
+          X_ACCESS_TOKEN: "${{ secrets.X_ACCESS_TOKEN }}"
+          X_ACCESS_SECRET: "${{ secrets.X_ACCESS_SECRET }}"
           GITHUB_TOKEN: "${{ github.token }}"
           SEARCH: "${{ inputs.search }}"
           SEARCH_DAYS: "${{ inputs.search_days || '21' }}"
