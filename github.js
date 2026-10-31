@@ -119,7 +119,7 @@ export async function repoStats(token, names, log) {
 
 // A screenshot for the card: the first real image in the repo's README. Badges, logos,
 // icons, avatars and SVGs are skipped; relative paths point at the repo's files.
-const SKIP_IMAGE = /shields\.io|badge|badgen|dcbadge|trendshift|codecov|travis-ci|circleci|\/workflows\/|buymeacoffee|ko-fi|star-history|contrib\.rocks|vercel\.com\/button|deploy|avatars?\b|\/logo|logo[\w-]*\.|icon[\w-]*\.|\.svg(\?|$)|^https?:\/\/github\.com\/[\w-]+\.png/i;
+const SKIP_IMAGE = /shields\.io|skills\.sh\/b\/|[?&]style=flat|badge|badgen|dcbadge|trendshift|codecov|travis-ci|circleci|\/workflows\/|buymeacoffee|ko-fi|star-history|contrib\.rocks|vercel\.com\/button|deploy|avatars?\b|\/logo|logo[\w-]*\.|icon[\w-]*\.|\.svg(\?|$)|^https?:\/\/github\.com\/[\w-]+\.png/i;
 
 export function pickReadmeImage(md, repo) {
   const text = (md || "").replace(/&#x2F;/gi, "/").replace(/&amp;/g, "&");

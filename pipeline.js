@@ -33,6 +33,13 @@ const CHECKPOINTS = [["1h", 1], ["24h", 24], ["7d", 168]];
 const REPLY_WINDOW_H = 6.5 * 24; // recent search only reaches 7 days back
 const WEEK = 7 * 864e5;
 
+// A real app's name, not a placeholder or a category
+export const realOriginal = s => {
+  const t = String(s || "").trim();
+  return t.length >= 2 && !/^(not specified|unspecified|unknown|none|n\/?a|various|multiple|other|generic|tbd|-+)$/i.test(t) &&
+    !/\b(tools?|apps|platforms|services|software|products|programs|utilities|websites|games)$/i.test(t);
+};
+
 const iso = t => new Date(t).toISOString().replace(/\.\d+Z$/, "Z");
 
 export async function run(prev, opts, { x, haiku, githubStats, githubImage, githubReadme, sources, log, now = Date.now() }) {
@@ -596,10 +603,14 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
     g.metrics.likes < 20 && !(g.reception.repo_counted && g.github?.stars >= 20) && !g.trials;
   // and ones nobody has reacted to at all yet that link no repo (they appear once they get likes)
   const unnoticed = g => g.reception.verdict === "too-early" && g.metrics.likes < 3 && !g.repo;
-  const anonymous = g => !g.project && !g.display_name && !g.repo && !g.product && !g.original_clean && !g.original;
+  // and ones that don't name a real app they clone: "Not specified", or a kind of thing rather
+  // than a product ("Reverse engineering tools", "paid TTS services"). A clone catalog lists
+  // clones of something; a general tool like a reverse-engineering kit isn't one.
+  const noOriginal = g => !g.product && !realOriginal(g.original_clean) && !realOriginal(g.original);
+  const anonymous = g => noOriginal(g) || (!g.project && !g.display_name && !g.repo);
   const shown = groups.filter(g => g.status !== "ok" || !(quiet(g) || unnoticed(g) || anonymous(g)));
   counts.hidden = groups.length - shown.length;
-  if (counts.hidden) log(`hidden: ${counts.hidden} projects still tiny, unnoticed, or with no name and no original`);
+  if (counts.hidden) log(`hidden: ${counts.hidden} projects still tiny, unnoticed, or not naming an app they clone`);
   groups = shown;
 
   // Steady ratings: a new rating shows once it has held for two scans in a row, so a score
