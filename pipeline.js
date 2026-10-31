@@ -602,6 +602,21 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
   if (counts.hidden) log(`hidden: ${counts.hidden} projects still tiny, unnoticed, or with no name and no original`);
   groups = shown;
 
+  // Self-check: a card whose posts link a GitHub repo should show a repo. The only accepted
+  // reason not to is a famous repo that isn't this project (Linux behind "Ginux"); anything
+  // else is a bug, logged every run and shown in the page's Status section.
+  const byId = new Map(results.map(e => [e.id, e]));
+  const audit = [];
+  for (const g of groups) {
+    if (g.status !== "ok" || g.repo) continue;
+    const linked = [...new Set(g.posts.flatMap(p => byId.get(p.id)?.repos || []))];
+    if (!linked.length) continue;
+    const ok = g.foreign_repo && linked.every(r => r.toLowerCase() === g.foreign_repo.toLowerCase());
+    audit.push({ code: g.code, name: g.project || g.display_name || g.id, linked, reason: ok ? "famous repo, not this project" : "repo missing" });
+  }
+  counts.audit_missing = audit.filter(a => a.reason === "repo missing").length;
+  if (counts.audit_missing) log(`self-check: ${counts.audit_missing} cards link a GitHub repo but don't show one: ${audit.filter(a => a.reason === "repo missing").slice(0, 5).map(a => `${a.name} (${a.linked[0]})`).join(", ")}`, "warn");
+
   counts.changed = groups.filter(g => g.history.length > 1 && g.history.at(-1).at === today).length;
   if (counts.changed) log(`ratings: ${counts.changed} projects changed`);
   log(`groups: ${results.length} posts about ${groups.length} projects`);
@@ -623,6 +638,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
       second_opinions: opinions,
       removed_ids: [...removedIds],
       removed_projects: removedProjects,
+      audit: audit.slice(0, 50),
       newsletter: await newsletter(),
       counts,
     },

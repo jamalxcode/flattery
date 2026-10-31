@@ -44,7 +44,9 @@ function renderReport(root, DATA, INFO, opts = {}) {
   // Can I use it? From the poster's own repo: installers in its releases, a web demo, a license,
   // and whether anyone still works on it
   const usable = e => {
-    const g = e.github && e.github.status !== "gone" && e.reception?.repo_counted !== false ? e.github : null;
+    // The card's own repo, whoever posted it: its stars may not count toward the rating
+    // (only the maker's do), but anyone can still install and use it
+    const g = e.github && e.github.status !== "gone" ? e.github : null;
     if (!g) return null;
     const days = g.pushed_at ? (Date.now() - Date.parse(g.pushed_at)) / 864e5 : null;
     const age = g.created ? (Date.now() - Date.parse(g.created)) / 864e5 : 999;
@@ -402,6 +404,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
     <li>${hoursAgo == null ? "No scan yet" : hoursAgo < 10 ? "🟢 On schedule" : hoursAgo < 26 ? "🟡 Running late" : "🔴 Scans have stopped"} · last scan ${hoursAgo == null ? "never" : hoursAgo < 1 ? "under an hour ago" : `${Math.round(hoursAgo)} hours ago`}</li>
     <li>${week.length} scans in the last 7 days (expected about 21), ${num(week.reduce((s, r) => s + (r.added || 0), 0))} new posts, ${num(week.reduce((s, r) => s + (r.changed || 0), 0))} rating changes</li>
     ${INFO.month ? `<li>X reads this month: ${num(INFO.month.reads)} of ${num(INFO.month.cap)}${INFO.month.reads >= INFO.month.cap ? " (budget reached: scans pause reading X until next month)" : ""}</li>` : ""}
+    ${(m => m.length ? `<li>⚠️ Self-check: ${m.length} ${m.length === 1 ? "card links" : "cards link"} a GitHub repo it doesn't show (${m.slice(0, 3).map(a => esc(a.name)).join(", ")}); it's logged on every scan as a bug to fix</li>` : "<li>✅ Self-check: every card that links a GitHub repo shows it</li>")((INFO.audit || []).filter(a => a.reason === "repo missing"))}
     <li>${num(live.length)} projects from ${num(DATA.reduce((s, e) => s + (e.posts?.length || 1), 0))} posts</li></ul>`;
 
   root.flattery = {
@@ -455,7 +458,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
             ${cls !== "danger" ? `<a class="xshare fav" href="${esc(xIntent(`❤️ My favourite ${what(e) ? `free take on ${what(e)}` : "clone"}: ${name(e)}${e.summary ? `\n\n${e.summary}` : ""}\n\nRated ${emo} ${rname} by the crowd on Flattery:`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="share-favourite">❤️ Share as my favourite</a>` : ""}
             <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="share-x">Share on X</a>
           </div>
-          <div class="verdict"><span class="emo">${emo}</span><span><b>${rname}</b><small>${rdesc}</small></span>
+          <div class="verdict"><span class="emo">${emo}</span><span><b>${rname}</b><small>${e.repo && g && e.reception.repo_counted === false
+            ? `${cls === "hype" ? "Lots of buzz on X. " : ""}Rated on reactions only: its repo (★ ${num(g.stars)}) isn't the poster's own, so GitHub stars don't count toward it.` : rdesc}</small></span>
             <span class="big">${e.reception.score}<small>score</small></span></div>
           ${e.summary ? `<p>${esc(e.summary)}</p>` : ""}
           ${s?.flags?.length ? `<div><h4>What people on ${src(e)} raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div>
@@ -466,7 +470,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
             <li>${u.ready === "install" ? `✅ Installers for ${esc(u.platforms.join(", "))}${otherGets.length ? `: ${otherGets.map(([os, url]) => `<a href="${esc(url)}" target="_blank" rel="noopener nofollow" data-goat="get">${esc(os)}</a>`).join(" · ")}` : ""}` : u.ready === "online" ? `🌐 Runs online: <a href="${esc(u.homepage)}" target="_blank" rel="noopener nofollow" data-goat="open">${esc(u.homepage.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "📦 Source code only: you'd build it yourself"}${u.homepage && u.ready === "install" ? ` · <a href="${esc(u.homepage)}" target="_blank" rel="noopener nofollow" data-goat="open">website</a>` : ""}</li>
             <li>${u.licensed ? `✅ License: ${esc(e.github.license)}` : "⚠️ No license: by default nobody else may use, copy or change it"}</li>
             <li>${u.alive === "abandoned" ? `🪦 Looks abandoned: no changes for ${Math.round(u.days)} days${e.github.status === "archived" ? " (archived)" : ""}` : u.alive === "active" ? `✅ Maintained${u.commits ? `: ${u.commits} commits in the last 30 days` : ""}` : `⏸ Quiet lately: last change ${Math.round(u.days)} days ago`}</li>
-          </ul></div>` : `<p class="note-small">${e.repo ? (g ? "This repo isn't the poster's own, so it isn't checked for installers." : "The linked repo was removed.") : "No GitHub repo linked yet, so it can't be installed or confirmed."}</p>`}
+          </ul></div>` : `<p class="note-small">${e.repo ? "The linked repo was removed." : e.foreign_repo ? `The post links github.com/${esc(e.foreign_repo)}, a well-known project that isn't this one, so it isn't used here.` : "No GitHub repo linked yet, so it can't be installed or confirmed."}</p>`}
           ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes${e.reception.confidence === "low" ? ' · <span class="low">low confidence</span>' : ""}</h4>${mini(s)}
             <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
           ${e.second_opinion ? `<p class="note-small">🔎 Second opinion (Claude Sonnet): ${e.second_opinion.agree ? "agrees" : "disagrees, so it's shown as Mixed"}. ${esc(e.second_opinion.note)}</p>` : ""}
