@@ -129,6 +129,10 @@ assert.equal(pickReadmeLogo('![b](https://img.shields.io/x) ![shot](docs/shot.pn
   assert.deepEqual(downloadsOf([{ tagName: "v1.0", releaseAssets: { nodes: [
     { name: "App-1.0-x64.dmg" }, { name: "App-1.0-arm64.dmg" }, { name: "App-Setup.exe" }, { name: "App.exe.sha256" }, { name: "app.AppImage" }] } }], "a/b"),
     { Mac: u("App-1.0-arm64.dmg"), Windows: u("App-Setup.exe"), Linux: u("app.AppImage") });
+  assert.deepEqual(downloadsOf([{ tagName: "v1.0", releaseAssets: { nodes: [
+    { name: "p-windows-arm64.msi" }, { name: "p-windows-x64.msi" }, { name: "p-linux-aarch64.AppImage" }, { name: "p-linux-x86_64.AppImage" },
+    { name: "p-macos-x64.dmg" }, { name: "p-macos-universal.dmg" }] } }], "a/b"),
+    { Mac: u("p-macos-universal.dmg"), Windows: u("p-windows-x64.msi"), Linux: u("p-linux-x86_64.AppImage") });
 }
 assert.deepEqual(parseAdd({ id: "9", urls: ["https://x.com/bob/status/123", "https://github.com/a/b"], repos: ["a/b"] }), { ids: ["123"], repos: ["a/b"] });
 // X's documented OAuth 1.0a example

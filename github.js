@@ -58,8 +58,11 @@ export function downloadsOf(releases, repo) {
     for (const [os, tests] of Object.entries(RANK)) {
       if (out[os]) continue;
       for (const re of tests) {
-        // Mac builds for Apple chips over Intel ones when both exist
-        const hits = assets.filter(a => re.test(a.name)).sort((x, y) => /arm64|aarch64|universal/i.test(y.name) - /arm64|aarch64|universal/i.test(x.name));
+        // Mac: universal or Apple-chip builds over Intel ones. Windows and Linux: regular x64
+        // builds over ARM ones, since most PCs are x64.
+        const pref = os === "Mac" ? n => /universal/i.test(n) * 2 + /arm64|aarch64/i.test(n)
+          : n => /x64|x86_64|amd64|win64/i.test(n) * 2 - /arm64|aarch64|armv7|armhf/i.test(n);
+        const hits = assets.filter(a => re.test(a.name)).sort((x, y) => pref(y.name) - pref(x.name));
         if (hits.length) { out[os] = url(hits[0].name); break; }
       }
     }
