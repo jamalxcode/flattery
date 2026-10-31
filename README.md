@@ -44,6 +44,8 @@ Penalties: being *ratioed* (more replies and quotes than likes), each red flag, 
 | **Don't touch** | a serious red flag raised by several people (scam/malware, stolen code, security issue), a removed repo, or a low score / mostly negative replies without GitHub to back it |
 | **New & untested** | under 20 likes and 5 reposts, or under 24 hours old with no replies read yet, and no real GitHub use |
 
+GitHub only counts when the repo is the poster's own: its owner matches their X handle or name (or a 5+ letter word of it, so `Anil-matcha` matches `@matchaman11`), or it was created at most 120 days before the post, so it's the clone itself even when a curator shares it. Linking someone else's famous project borrows nothing.
+
 The thresholds live at the top of `reception.js`. This is crowd opinion, not a legal or technical judgement.
 
 ## Setup
