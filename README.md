@@ -1,6 +1,6 @@
 # Flattery
 
-> “Imitation is the sincerest form of flattery that mediocrity can pay to greatness.” — Oscar Wilde
+> “Imitation is the sincerest form of flattery.” Hence the name: every project here imitates software you already know.
 
 A catalog of clones, reverse-engineered and reimagined versions of existing software, found on X and ranked by how people received them.
 
