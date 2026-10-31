@@ -358,6 +358,15 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   for (const bad of ["Not specified", "unknown", "N/A", "Reverse engineering tools", "paid TTS services", ""]) assert.ok(!realOriginal(bad), bad);
   assert.equal(pickReadmeImage("![x](https://skills.sh/b/a/b?style=flat-square) ![s](docs/s.png)", "a/b"), "https://raw.githubusercontent.com/a/b/HEAD/docs/s.png");
 }
+// A card with no name of its own but a real original stays on the page ("Discord clone");
+// one that names no app it clones is kept off
+{
+  const unnamed = (id, original) => ({ ...JSON.parse(JSON.stringify(r1)), results: r1.results.map(e => e.id === id ? { ...e, project: "", display_name: "", repo: null, repos: [], github: undefined, original, original_clean: original, product: null, named_v: 9, match_checked: "x", original_checked: "x" } : e) });
+  const keep = await run(unnamed("p2", "Discord"), { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, { x: new X("token", log, { maxReads: 3000 }), haiku, githubStats, log, now: T0 + 48 * H });
+  assert.ok(keep.groups.some(g => g.posts.some(p => p.id === "p2")), "an unnamed Discord clone stays");
+  const drop = await run(unnamed("p2", "Not specified"), { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, { x: new X("token", log, { maxReads: 3000 }), haiku, githubStats, log, now: T0 + 48 * H });
+  assert.ok(!drop.groups.some(g => g.posts.some(p => p.id === "p2")), "a card naming no app is kept off");
+}
 
 // A serious flag judged under older rules is read again, even when replies haven't grown
 {
