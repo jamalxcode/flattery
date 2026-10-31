@@ -185,7 +185,7 @@ const COMPARE_SCHEMA = {
 };
 
 // Bumped when naming changes, so old names are redone once
-export const NAME_VERSION = 2;
+export const NAME_VERSION = 3;
 export const REVIEW_VERSION = 2;
 
 const REVIEW_SCHEMA = {
@@ -252,7 +252,8 @@ export class Haiku {
       const batch = entries.slice(i, i + 30);
       const content = "Give each project its own name, the way its maker calls it, if the post, a link or the repo gives one (e.g. 'PhotoCraft', 'Cleanly'). " +
         "If it has no name of its own, answer with an empty name. Never make one up and never describe it ('Open Discord alternative', 'Free Mac cleaner' are wrong: answer empty). No quotes or emojis.\n\n" +
-        batch.map(e => `<entry id="${e.id}" clones="${(e.original_clean || e.original || "").replace(/"/g, "'")}" repo="${e.repo || ""}">\n${(e.text || "").slice(0, 500)}\n${e.summary || ""}\n</entry>`).join("\n");
+        "The links often carry the name (a site like photocraft.app or a store page).\n\n" +
+        batch.map(e => `<entry id="${e.id}" clones="${(e.original_clean || e.original || "").replace(/"/g, "'")}" repo="${e.repo || ""}">\n${(e.text || "").slice(0, 500)}\nLinks: ${(e.urls || []).filter(u => !/(x|twitter)\.com\//.test(u)).slice(0, 4).join(" ") || "none"}\n${e.summary || ""}\n</entry>`).join("\n");
       const res = await this.ask(TRIAGE_SYSTEM, content, NAME_SCHEMA);
       for (const r of res?.results || []) if (batch.some(e => e.id === r.id) && r.name.trim() && !/^not[- ]a[- ]clone$/i.test(r.name.trim())) out.set(r.id, r.name.trim().slice(0, 40));
     }

@@ -494,7 +494,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
             ${altUrl(e) ? `<p><a href="${esc(altUrl(e))}">All ${esc(what(e))} alternatives →</a></p>` : ""}
             ${(e.history || []).length > 1 ? `<p class="note-small">Rating history: ${e.history.map(x => `${rating(x.verdict)[1]} ${esc(x.at.slice(5))}`).join(" → ")}</p>` : ""}
             ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>${src(e) === "X" ? `@${esc(e.author.username)} · ${num(e.author.followers)} followers` : `${esc(e.author.username)} on ${src(e)}`} · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
-            ${e.group ? `<div><h4>${e.posts.length} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
+            ${e.group ? `<div><h4>${(e.posts_count || e.posts.length)} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
               <a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc((p.created_at || "").slice(0, 10))}</span>
               <small>${esc(p.text) || "removed"}</small></li>`).join("")}</ul></div>` : ""}
             <div><h4>On ${src(e)}${e.group ? " · all posts" : ""}</h4>${xFig}</div>

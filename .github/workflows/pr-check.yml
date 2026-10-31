@@ -23,4 +23,5 @@ jobs:
       - name: Page check in a browser
         run: |
           npx playwright install --with-deps chromium >/dev/null
+          node tools/slim.mjs --data data/latest.json --out data/site.json
           node tools/ui-check.mjs
