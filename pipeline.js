@@ -396,7 +396,8 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
 
   // 8. Newsletter: "This week in clones", written by Haiku from the week's changes, weekly
   async function newsletter() {
-    const issues = fromX ? [...(prev.info.newsletter || [])] : [];
+    // Issues from before version 2 used internal rating names and "Untitled": rewritten once
+    const issues = fromX ? (prev.info.newsletter || []).filter(n => n.v >= 2) : [];
     if (opts.newsletter === false || (issues[0] && now - Date.parse(issues[0].date) < WEEK - 6 * 36e5)) return issues;
     const since = iso(now - WEEK).slice(0, 10);
     const growth = g => {
@@ -409,15 +410,16 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
     const rising = live.filter(g => growth(g) >= 5).sort((a, b) => growth(b) - growth(a)).slice(0, 3);
     const pick = [...new Map([...changed.sort((a, b) => b.reception.score - a.reception.score), ...rising].map(g => [g.id, g])).values()].slice(0, 12);
     if (pick.length < 2) return issues;
-    const items = pick.map(g => ({ id: g.id, name: g.project || g.repo || "Untitled", verdict: g.reception.verdict,
-      previous: g.history.length > 1 ? g.history.at(-2).verdict : null, likes: g.metrics.likes, posts: g.posts?.length || 1,
+    const LABEL = { "well-received": "Loved", proven: "Proven on GitHub", unconfirmed: "Hyped, unproven", mixed: "Mixed", "stay-away": "Don't touch", "too-early": "New & untested" };
+    const items = pick.map(g => ({ id: g.id, name: g.project || g.repo?.split("/")[1] || `${g.original_clean || g.original || "Unnamed"} clone`, verdict: g.reception.verdict,
+      rating: LABEL[g.reception.verdict], previous_rating: g.history.length > 1 ? LABEL[g.history.at(-2).verdict] : null, likes: g.metrics.likes, posts: g.posts?.length || 1,
       stars: g.reception.repo_counted ? g.github?.stars : undefined, stars_a_day: growth(g) || undefined,
       clone_of: g.original_clean || g.original, summary: g.summary }));
     const removed = removedProjects.filter(r => r.at >= since).map(r => r.name);
     const nl = await haiku.newsletter({ week: `${since} to ${today}`, items, removed });
     if (!nl) return issues;
     const byId = new Map(items.map(i => [i.id, i]));
-    issues.unshift({ date: today, title: nl.title, intro: nl.intro, outro: nl.outro,
+    issues.unshift({ v: 2, date: today, title: nl.title, intro: nl.intro, outro: nl.outro,
       items: nl.items.map(i => ({ id: i.id, name: byId.get(i.id).name, verdict: byId.get(i.id).verdict, blurb: i.blurb })) });
     log(`newsletter: "${nl.title}" with ${nl.items.length} projects`);
     return issues.slice(0, 52);
