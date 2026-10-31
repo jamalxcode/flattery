@@ -17,9 +17,11 @@
 #                      newly loved projects on X as the Flattery account; without them nothing is posted
 # Without them the scan fails and the previous catalog is republished.
 #
-# Timer: cron-job.org can start this through GitHub's API (POST
-# /repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches), as for heat,
-# because GitHub's own schedule runs late or not at all. The schedule below is a backup.
+# Timer: as for heat.sala.company, cron-job.org starts this every 8 hours through GitHub's API
+# (POST /repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches, body {"ref":"main"}),
+# with a fine-grained token limited to the repo (Actions: read and write), because GitHub's own
+# schedule runs late or not at all. The schedule below stays on as a backup, and
+# freshness.yml (hourly) emails a failure if the live catalog stops updating.
 name: Scan and deploy
 on:
   push: { branches: [main] }
