@@ -1,3 +1,4 @@
+import { GOATCOUNTER } from "./analytics.js";
 // Builds a standalone HTML report: the stylesheet and renderer inlined, with the data embedded.
 // Used by the scheduled scan (tools/scan.mjs).
 export function reportHtml({ css, renderJs, noteHtml, results, info }) {
@@ -12,5 +13,5 @@ export function reportHtml({ css, renderJs, noteHtml, results, info }) {
 <script>${renderJs}
 renderReport(document.getElementById("report"), ${safe(results)}, ${safe(info)});
 document.querySelector("[data-r=status]").textContent = ${safe(info.generated ? "Generated " + info.generated : "")};
-<\/script></body></html>`;
+<\/script>${GOATCOUNTER}</body></html>`;
 }

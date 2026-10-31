@@ -2,6 +2,7 @@
 // deploy. Plain HTML and CSS bars (values written on them, hover titles), the site's styles.
 //
 //   node tools/stats.mjs [--data data/latest.json] [--out .]
+import { GOATCOUNTER } from "../analytics.js";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
 
@@ -115,7 +116,7 @@ const html = `${head}<body>
       </tbody></table></section>
   </div>
   <p class="note-small">${rated.length} of ${live.length} clones are rated so far; the rest are new or didn't catch on. Crowd opinion, not a legal or technical judgement.</p>
-</main></body></html>`;
+</main>${GOATCOUNTER}</body></html>`;
 await mkdir(`${a.out}/stats`, { recursive: true });
 await writeFile(`${a.out}/stats/index.html`, html);
 console.log(`stats: ${vendors.length} companies, ${apps.length} apps, ${weekRows.length} weeks, ${builderRows.length} builders`);
