@@ -65,7 +65,7 @@ delete info.counts;
 await mkdir(a.out, { recursive: true });
 await writeFile(`${a.out}/latest.json`, JSON.stringify({ info, results }));
 const [css, renderJs, index] = await Promise.all(["style.css", "render.js", "index.html"].map(f => readFile(new URL(f, root), "utf8")));
-const noteHtml = index.match(/<div class="note">([\s\S]*?)<\/div>/)?.[1] || "";
+const noteHtml = index.match(/<section class="about">([\s\S]*?)<\/section>/)?.[1] || "";
 await writeFile(`${a.out}/latest.html`, reportHtml({ css, renderJs, noteHtml, results, info }));
 
 const by = v => results.filter(e => e.reception.verdict === v).length;

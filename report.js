@@ -5,13 +5,12 @@ export function reportHtml({ css, renderJs, noteHtml, results, info }) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flattery report</title><style>${css}</style></head>
-<body><div class="wrap">
-<header><h1>Flattery report</h1>
-<blockquote>“Imitation is the sincerest form of flattery that mediocrity can pay to greatness.”<cite>— Oscar Wilde</cite></blockquote></header>
+<body><main class="wrap">
 <div id="report"></div>
-<div class="note">${noteHtml}</div>
-</div>
+<section class="about">${noteHtml}</section>
+</main>
 <script>${renderJs}
 renderReport(document.getElementById("report"), ${safe(results)}, ${safe(info)});
+document.querySelector("[data-r=status]").textContent = ${safe(info.generated ? "Generated " + info.generated : "")};
 <\/script></body></html>`;
 }

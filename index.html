@@ -3,35 +3,43 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flattery</title>
-<meta name="description" content="A catalog of software clones found on X, ranked by how people received them.">
+<title>Flattery: software clones, rated by the crowd</title>
+<meta name="description" content="Clones, reverse-engineered and reimagined versions of existing software, found on X and rated by how people received them.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪞</text></svg>">
+<link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
+<script>try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Flattery</h1>
-    <blockquote>“Imitation is the sincerest form of flattery that mediocrity can pay to greatness.”<cite>— Oscar Wilde</cite></blockquote>
-    <p class="lead">Clones, reverse-engineered and reimagined versions of existing software, found on X and ranked by how people received them: likes, reposts, the tone of the replies, and GitHub stars and downloads to confirm.</p>
-  </header>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="./"><span class="mark" aria-hidden="true">🪞</span>Flattery</a>
+    <div class="search-wrap" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" class="search" id="search" placeholder="Search clones…" aria-label="Search clones">
+    </div>
+    <button class="bar-btn dark" id="surprise" type="button" aria-label="Surprise me: open a random loved clone">❤️ <span class="label">Surprise me</span></button>
+    <button class="bar-btn" id="theme-btn" type="button" aria-label="Colour theme: automatic">◐ Auto</button>
+  </div>
+</header>
 
-  <section id="livePane">
-    <p class="status" id="liveStatus">Loading the latest scan…</p>
-    <div id="live"></div>
+<main class="wrap">
+  <div id="live"></div>
+
+  <section class="about">
+    <h2>How the ratings work</h2>
+    <p>Every two hours Flattery searches X for posts announcing a clone, a reverse-engineered or a reimagined version of existing software. Claude Haiku keeps only real announcements, then reads the replies and quote posts to judge the tone and spot red flags such as scams, stolen code or projects that don't work.</p>
+    <p><b>❤️ Loved</b> needs all three: lots of likes and reposts, mostly positive replies, and real use on GitHub (100+ stars or 500+ release downloads).
+      <b>🔥 Hyped, unproven</b> is popular on X but has no repo, or one nobody uses yet. <b>🆕 New &amp; untested</b> is too new or too small to judge.
+      <b>☠️ Don't touch</b> means mostly negative replies, a pile-on, a removed repo, or a serious red flag raised by several people.</p>
+    <p>This is crowd opinion, not a legal or technical judgement. Always check a project yourself before you run it.</p>
   </section>
 
-  <div class="note">
-    <b>How to read this.</b> Flattery searches X for posts announcing clones, reverse-engineered or reimagined versions of existing software,
-    and Claude Haiku keeps only real announcements. The <b>reception</b> score combines likes, reposts and bookmarks, engagement per view,
-    the tone of the replies and quote posts (read by Haiku), and the linked GitHub repo's stars, downloads and star growth.
-    A post is <b style="color:var(--ok)">well received</b> only when GitHub confirms it (at least 100 stars or 500 release downloads) and people
-    are mostly positive. <b style="color:var(--re)">Buzz, not confirmed</b> means a popular post with no repo or one nobody uses yet.
-    <b style="color:var(--hi)">Stay away</b> means mostly negative replies, a pile-on (many more replies than likes), a removed repo,
-    or a serious red flag such as scam, malware or stolen code. Posts under 24 hours old or with little reach are <b>too early to tell</b>.
-    This is crowd opinion, not a legal or technical judgement.
-  </div>
-</div>
+  <footer>
+    <span>Flattery · a <a href="https://go.sala.company">Sala Company</a> app</span>
+    <span><a href="data/latest.json">JSON</a> · <a href="data/latest.html">standalone report</a> · <a href="https://github.com/jamalxcode/flattery">Source</a></span>
+  </footer>
+</main>
 <script src="render.js"></script>
 <script type="module" src="app.js"></script>
 <!-- GoatCounter analytics (not loaded on localhost; paths are prefixed with the host so all *.sala.company apps share one dashboard) -->

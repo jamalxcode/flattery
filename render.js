@@ -1,129 +1,179 @@
-// Renders the catalog. Shared by the live page and the standalone report.
-function renderReport(root, DATA, INFO) {
+// Renders the catalog as an app store: hero with the rating legend, a shelf of the best
+// loved, filters, a grid of cards, and a detail sheet per clone. Shared by the live page
+// and the standalone report. opts.search: an <input> outside root to filter with.
+const RATINGS = [
+  ["well-received", "❤️", "Loved", "Popular on X, mostly positive replies, and real use on GitHub.", "loved"],
+  ["unconfirmed", "🔥", "Hyped, unproven", "Lots of buzz on X, but no repo or one nobody uses yet.", "hype"],
+  ["too-early", "🆕", "New & untested", "Too new or too small to judge yet.", "new"],
+  ["mixed", "😐", "Mixed", "People are split on it.", "mixed"],
+  ["stay-away", "☠️", "Don't touch", "Mostly negative, a pile-on, a removed repo, or red flags like scams or stolen code.", "danger"],
+];
+
+function renderReport(root, DATA, INFO, opts = {}) {
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const num = v => (v || 0).toLocaleString("en", { notation: v >= 10000 ? "compact" : "standard", maximumFractionDigits: 1 });
-  const VERDICTS = [
-    ["well-received", "Well received", "ok"], ["unconfirmed", "Buzz, not confirmed", "re"], ["mixed", "Mixed", "mid"],
-    ["stay-away", "Stay away", "hi"], ["too-early", "Too early", "lo"],
-  ];
-  const vName = v => VERDICTS.find(x => x[0] === v)?.[1] || v;
-  const vCls = v => VERDICTS.find(x => x[0] === v)?.[2] || "lo";
+  const rating = v => RATINGS.find(r => r[0] === v) || RATINGS[3];
   const label = p => p.vendor === p.name ? p.name : `${p.vendor} ${p.name}`;
   const what = e => e.product ? label(e.product) : e.original;
+  const name = e => e.project || e.repo?.split("/")[1] || what(e) && `${what(e)} clone` || "Untitled";
+  const OF = { clone: "Clone of", "reverse-engineered": "Reverse-engineered", reimagined: "Reimagined", port: "Port of" };
+  const ofLine = e => what(e) ? `${OF[e.kind] || "Clone of"} ${what(e)}` : (e.kind || "clone");
+  const hue = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+  const live = DATA.filter(e => e.status !== "gone");
+  const search = opts.search || null;
+
+  const art = e => {
+    const n = name(e);
+    return `<div class="tile" style="--h:${hue(n)}"><span class="tile-mark">${esc(n)}</span>${what(e) ? `<span class="tile-of">≈ ${esc(what(e))}</span>` : ""}</div>`;
+  };
+  const mini = s => {
+    if (!s?.sampled) return "";
+    const pc = n => (100 * n / s.sampled).toFixed(1);
+    return `<div class="mini" title="${s.positive} positive, ${s.neutral} neutral, ${s.negative} negative"><i class="p" style="width:${pc(s.positive)}%"></i><i class="u" style="width:${pc(s.neutral)}%"></i><i class="m" style="width:${pc(s.negative)}%"></i></div>`;
+  };
 
   if (!root.dataset.ready) {
     root.innerHTML = `
-      <p class="sub" data-r="sub"></p>
-      <div class="stats" data-r="stats"></div>
-      <div class="controls">
-        <input type="search" data-r="q" placeholder="Filter by project, author, product…" aria-label="Filter">
-        <label>Verdict <select data-r="verdict">
-          <option value="well-received">well received</option><option value="good">well received + buzz</option>
-          <option value="all">all</option>${VERDICTS.map(([v, n]) => `<option value="${v}">${n.toLowerCase()}</option>`).join("")}
-        </select></label>
-        <label>Kind <select data-r="kind">
-          <option value="">any</option><option value="clone">clone</option><option value="reverse-engineered">reverse-engineered</option>
-          <option value="reimagined">reimagined</option><option value="port">port</option>
-        </select></label>
-        <label>Of <select data-r="product"></select></label>
-        <label>Sort <select data-r="sort">
-          <option value="score">Reception</option><option value="likes">Likes</option><option value="stars">GitHub stars</option>
-          <option value="downloads">Downloads</option><option value="newest">Newest</option>
-        </select></label>
-        <label><input type="checkbox" data-r="gone"> show removed</label>
-      </div>
-      <div data-r="list"></div>`;
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="pills"><span class="pill accent" data-r="count"></span><span class="pill">Found on X · checked on GitHub</span></div>
+          <h1>Software clones, <em>rated by the crowd.</em></h1>
+          <p class="lede">Reverse-engineered, reimagined and cloned versions of apps you know, found on X and ranked by how people reacted: likes, reposts, the tone of the replies, and GitHub stars and downloads as proof.</p>
+          <p class="quote">“Imitation is the sincerest form of flattery that mediocrity can pay to greatness.” — Oscar Wilde</p>
+          <p class="status" data-r="status"></p>
+        </div>
+        <div class="legend"><h2>Ratings</h2><div data-r="legend"></div></div>
+      </section>
+      <section class="fresh" data-r="shelfWrap"><h2 class="section-title">❤️ Most loved</h2><ul class="shelf" data-r="shelf"></ul></section>
+      <section id="apps">
+        <div class="filters-row">
+          <div class="filters" data-r="filters"></div>
+          <div class="selects">
+            ${search ? "" : `<input type="search" class="search" data-r="q" placeholder="Search clones…" aria-label="Search clones" style="padding-left:16px;height:40px;width:200px">`}
+            <select data-r="product" aria-label="Clones of"></select>
+            <select data-r="sort" aria-label="Sort">
+              <option value="score">Top rated</option><option value="likes">Most liked</option><option value="stars">Most GitHub stars</option>
+              <option value="downloads">Most downloads</option><option value="newest">Newest</option>
+            </select>
+          </div>
+        </div>
+        <ul class="grid" data-r="grid"></ul>
+      </section>
+      <dialog class="sheet" data-r="sheet"></dialog>`;
     root.dataset.ready = "1";
-    root.querySelectorAll("input,select").forEach(el => el.addEventListener("input", () => renderReport(root, DATA, INFO)));
+    root._filter = "all";
+    const rerender = () => renderReport(root, root._data, root._info, opts);
+    root.querySelectorAll("select,[data-r=q]").forEach(el => el.addEventListener("input", rerender));
+    search?.addEventListener("input", rerender);
+    root.addEventListener("click", ev => {
+      const f = ev.target.closest("[data-filter]");
+      if (f) {
+        root._filter = root._filter === f.dataset.filter && f.closest("[data-r=legend]") ? "all" : f.dataset.filter;
+        rerender();
+        if (f.closest("[data-r=legend]")) root.querySelector("#apps").scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+      const o = ev.target.closest("[data-open]");
+      if (o) root.flattery.open(o.dataset.open);
+    });
+    const sheet = root.querySelector("[data-r=sheet]");
+    sheet.addEventListener("click", ev => { if (ev.target === sheet || ev.target.closest(".close")) sheet.close(); });
   }
+  root._data = DATA;
+  root._info = INFO;
   const $ = k => root.querySelector(`[data-r=${k}]`);
-  // A new data set opens on the well-received list when it has any
-  if (root._data !== DATA) {
-    root._data = DATA;
-    $("verdict").value = DATA.some(e => e.reception.verdict === "well-received") ? "well-received" : "all";
-  }
+  const by = v => live.filter(e => e.reception.verdict === v);
 
-  const live = DATA.filter(e => e.status !== "gone");
-  $("sub").textContent = `${INFO.generated ? "Updated " + INFO.generated + " · " : ""}${live.length} clones found on X`;
-  const by = v => live.filter(e => e.reception.verdict === v).length;
-  $("stats").innerHTML = [
-    [by("well-received"), "well received, confirmed on GitHub"],
-    [by("unconfirmed"), "buzz on X, not confirmed on GitHub"],
-    [by("mixed"), "mixed reception"],
-    [by("stay-away"), "stay away"],
-    [by("too-early"), "too early to tell"],
-  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${esc(s)}</span></div>`).join("");
+  $("count").textContent = `${live.length} clones tracked`;
+  if (search) search.placeholder = `Search ${live.length} clones…`;
+  $("legend").innerHTML = RATINGS.map(([v, emo, name, desc, cls]) => `
+    <button type="button" class="r-${cls}" data-filter="${v}" aria-pressed="${root._filter === v}">
+      <span class="emo">${emo}</span><span><b>${name}</b><small>${desc}</small></span><span class="n">${by(v).length}</span>
+    </button>`).join("");
+
+  // Most loved: the well received first, topped up with the best of the rest
+  const loved = by("well-received").sort((a, b) => b.reception.score - a.reception.score);
+  $("shelfWrap").hidden = !loved.length;
+  $("shelf").innerHTML = loved.slice(0, 12).map(e => `<li><button type="button" data-open="${esc(e.id)}">
+    <div class="art">${art(e)}</div><span class="name">${esc(name(e))}</span>
+    <span class="meta">❤️ ${e.reception.score} · ★ ${num(e.github?.stars)} · ${esc(what(e) || e.kind)}</span></button></li>`).join("");
+
+  const chips = [["all", "All", live.length], ...RATINGS.map(([v, emo, n]) => [v, `${emo} ${n}`, by(v).length])];
+  const gone = DATA.length - live.length;
+  if (gone) chips.push(["gone", "🗑 Removed", gone]);
+  $("filters").innerHTML = chips.map(([v, t, n]) => `<button type="button" class="filter" data-filter="${v}" aria-pressed="${root._filter === v}">${t} <span class="n">${n}</span></button>`).join("");
 
   const counts = new Map();
   for (const e of live) if (what(e)) counts.set(what(e), (counts.get(what(e)) || 0) + 1);
   const pick = $("product").value;
-  $("product").innerHTML = '<option value="">anything</option>' + [...counts].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+  $("product").innerHTML = '<option value="">Clones of anything</option>' + [...counts].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
     .map(([p, c]) => `<option value="${esc(p)}"${p === pick ? " selected" : ""}>${esc(p)} (${c})</option>`).join("");
 
-  const q = $("q").value.trim().toLowerCase(), verdict = $("verdict").value, kind = $("kind").value, key = $("sort").value;
-  let rows = DATA.filter(e => ($("gone").checked || e.status !== "gone") &&
-    (verdict === "all" || e.reception.verdict === verdict || (verdict === "good" && ["well-received", "unconfirmed"].includes(e.reception.verdict))) &&
-    (!kind || e.kind === kind) && (!pick || what(e) === pick));
-  if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.summary, e.author, e.repo]).toLowerCase().includes(q));
+  const q = (search || $("q")).value.trim().toLowerCase();
+  const f = root._filter;
+  let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || e.reception.verdict === f)) &&
+    (!pick || what(e) === pick));
+  if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.summary, e.author?.username, e.repo, e.product]).toLowerCase().includes(q));
   const sorts = {
-    score: e => e.reception.score, likes: e => e.metrics.likes, stars: e => e.github?.stars ?? -1,
-    downloads: e => e.github?.downloads ?? -1, newest: e => Date.parse(e.created_at),
+    score: e => e.reception.score - (e.reception.verdict === "stay-away" ? 1000 : 0), likes: e => e.metrics.likes,
+    stars: e => e.github?.stars ?? -1, downloads: e => e.github?.downloads ?? -1, newest: e => Date.parse(e.created_at),
   };
+  const key = $("sort").value;
   rows.sort((a, b) => sorts[key](b) - sorts[key](a));
-  if (!rows.length) {
-    $("list").innerHTML = `<div class="empty">${DATA.length ? "Nothing matches. Try another verdict or “all”." : "No results yet."}</div>`;
-    return;
-  }
 
-  const sentimentBar = s => {
-    if (!s?.sampled) return "";
-    const pc = n => Math.round(100 * n / s.sampled);
-    return `<div class="senti" title="${s.sampled} replies and quotes read">
-      <i><em class="pos" style="width:${pc(s.positive)}%"></em><em class="neu" style="width:${pc(s.neutral)}%"></em><em class="neg" style="width:${pc(s.negative)}%"></em></i>
-      <span><b class="pos">${s.positive}</b> positive · ${s.neutral} neutral · <b class="neg">${s.negative}</b> negative</span></div>`;
-  };
-  const githubBox = e => {
-    const g = e.github;
-    if (!e.repo) return '<div class="gh none">No GitHub repo linked</div>';
-    const link = `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener">${esc(e.repo)}</a>`;
-    if (!g) return `<div class="gh">${link} <span class="muted">not checked yet</span></div>`;
-    if (g.status === "gone") return `<div class="gh">${link} <span class="chip gone">repo removed</span></div>`;
-    const h = g.stars_history || [];
-    const days = h.length > 1 ? (Date.parse(h.at(-1).at) - Date.parse(h[0].at)) / 864e5 : 0;
-    const growth = days >= 0.9 ? Math.round((h.at(-1).stars - h[0].stars) / days) : null;
-    return `<div class="gh${e.reception.confirmed ? " ok" : ""}">${link}
-      <span>★ ${num(g.stars)}</span><span>⑂ ${num(g.forks)}</span><span>⬇ ${num(g.downloads)} downloads</span>
-      ${growth != null ? `<span>${growth >= 0 ? "+" : ""}${num(growth)} stars/day</span>` : ""}
-      ${g.language ? `<span>${esc(g.language)}</span>` : ""}<span>license ${esc(g.license || "none")}</span>
-      ${g.status === "archived" ? '<span class="chip moved">archived</span>' : ""}</div>`;
-  };
+  $("grid").innerHTML = rows.length ? rows.map(e => {
+    const [, emo, rname, , cls] = rating(e.reception.verdict);
+    return `<li><article class="card r-${cls}${e.status === "gone" ? " gone" : ""}">
+      <div class="art">${art(e)}<span class="rate"><i>${emo}</i>${rname}</span></div>
+      <div class="card-body">
+        <h3><button type="button" data-open="${esc(e.id)}">${esc(name(e))}</button></h3>
+        <p class="of">${esc(ofLine(e))}</p>
+        ${e.summary ? `<p class="sum">${esc(e.summary)}</p>` : ""}
+        <div class="stats"><span class="score">${e.reception.score}</span><span>♥ ${num(e.metrics.likes)}</span>
+          ${e.github && e.github.status !== "gone" ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
+          <span>@${esc(e.author.username)}</span></div>
+        ${mini(e.sentiment)}
+      </div></article></li>`;
+  }).join("") : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
 
-  $("list").innerHTML = rows.map(e => {
-    const m = e.metrics, r = e.reception;
-    return `
-    <div class="card${e.status === "gone" ? " is-gone" : ""}">
-      <div class="score"><div class="big ${vCls(r.verdict)}">${r.score}</div><div class="lbl">reception</div></div>
-      <div class="body">
-        <span class="verdict ${vCls(r.verdict)}">${esc(vName(r.verdict))}</span>
-        <span class="name">${esc(e.project || e.repo?.split("/")[1] || "Untitled project")}</span>
-        ${what(e) ? `<span class="chip product">≈ ${esc(what(e))}</span>` : ""}
-        <span class="chip kind">${esc(e.kind)}</span>
-        ${e.status === "gone" ? `<span class="chip gone">post removed${e.gone_since ? " since " + esc(e.gone_since) : ""}</span>` : ""}
-        ${e.summary ? `<div class="desc">${esc(e.summary)}</div>` : ""}
-        <blockquote class="post"><p>${esc(e.text) || "<i>post removed</i>"}</p><cite><a href="${esc(e.url)}" target="_blank" rel="noopener">@${esc(e.author.username)}</a> · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}</cite></blockquote>
-        <div class="meta">
-          <span>♥ ${num(m.likes)}</span><span>⟲ ${num(m.reposts)}</span><span>💬 ${num(m.replies)}</span><span>❝ ${num(m.quotes)}</span>
-          <span>🔖 ${num(m.bookmarks)}</span>${m.views ? `<span>👁 ${num(m.views)}</span>` : ""}
-        </div>
-        ${sentimentBar(e.sentiment)}
-        ${e.sentiment?.summary ? `<div class="desc">“${esc(e.sentiment.summary)}”</div>` : ""}
-        ${githubBox(e)}
-        <div class="chips">
-          ${(e.sentiment?.flags || []).map(f => `<span class="chip flag">${esc(f.replaceAll("-", " "))}</span>`).join("")}
-          ${r.reasons.filter(s => e.repo || !/^no GitHub repo/.test(s)).map(s => `<span class="chip note">${esc(s)}</span>`).join("")}
-        </div>
-        <details><summary>score parts</summary>${Object.entries(r.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}<br>found by: ${e.found_by.map(esc).join("<br>")}</details>
-      </div>
-    </div>`;
-  }).join("");
+  root.flattery = {
+    open(id) {
+      const e = DATA.find(x => x.id === id);
+      if (!e) return;
+      const [, emo, rname, rdesc, cls] = rating(e.reception.verdict);
+      const m = e.metrics, s = e.sentiment, g = e.github && e.github.status !== "gone" ? e.github : null;
+      const h = g?.stars_history || [];
+      const days = h.length > 1 ? (Date.parse(h.at(-1).at) - Date.parse(h[0].at)) / 864e5 : 0;
+      const growth = days >= 0.9 ? Math.round((h.at(-1).stars - h[0].stars) / days) : null;
+      const fig = (v, t) => `<div><b>${v}</b><small>${t}</small></div>`;
+      const sheet = $("sheet");
+      sheet.className = `sheet r-${cls}`;
+      sheet.innerHTML = `
+        <button type="button" class="close" aria-label="Close">×</button>
+        <div class="art">${art(e)}</div>
+        <div class="sheet-body">
+          <div><h2>${esc(name(e))}</h2><p class="of">${esc(ofLine(e))}</p></div>
+          <div class="verdict"><span class="emo">${emo}</span><span><b>${rname}</b><small>${rdesc}</small></span>
+            <span class="big">${e.reception.score}<small>score</small></span></div>
+          ${e.summary ? `<p>${esc(e.summary)}</p>` : ""}
+          <div class="actions">
+            ${e.repo && cls !== "danger" ? `<a class="primary" href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
+            <a${e.repo && cls !== "danger" ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener">Open the post on X</a>
+            ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow">☠️ Repo (don't run it)</a>` : ""}
+          </div>
+          ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>@${esc(e.author.username)} · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
+          <div><h4>On X</h4><div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div></div>
+          ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes</h4>${mini(s)}
+            <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
+          ${s?.flags?.length ? `<div><h4>Red flags people raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div></div>` : ""}
+          ${g ? `<div><h4>On GitHub · ${esc(e.repo)}</h4><div class="figures">${fig(num(g.stars), "stars")}${fig(num(g.forks), "forks")}${fig(num(g.downloads), "downloads")}${growth != null ? fig((growth >= 0 ? "+" : "") + num(growth), "stars a day") : ""}${fig(esc(g.license || "none"), "license")}</div>
+            ${g.status === "archived" ? '<p class="note-small">This repo is archived.</p>' : ""}</div>`
+            : `<p class="note-small">${e.repo ? "The linked repo was removed." : "No GitHub repo linked yet, so it can't be confirmed."}</p>`}
+          ${e.reception.reasons.length ? `<div class="chips">${e.reception.reasons.map(r => `<span class="chip">${esc(r)}</span>`).join("")}</div>` : ""}
+          <p class="note-small">Score parts: ${Object.entries(e.reception.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}. Crowd opinion, not a legal or technical judgement.</p>
+        </div>`;
+      if (!sheet.open) sheet.showModal();
+      sheet.scrollTop = 0;
+    },
+  };
 }
