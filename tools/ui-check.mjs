@@ -3,7 +3,7 @@
 // drawer, no script errors and no sideways scrolling, on a desktop and a phone screen.
 // Runs on every pull request (.github/workflows/pr-check.yml), so a broken page isn't merged.
 //
-//   node tools/ui-check.mjs [--root .]      (needs data/latest.json under the root;
+//   node tools/ui-check.mjs [--root .]      (needs data/latest.json, and data/site.json from tools/slim.mjs, under the root;
 //                                            CHROMIUM=/path to use a local browser)
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";

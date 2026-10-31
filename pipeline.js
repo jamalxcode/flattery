@@ -28,6 +28,10 @@ export const GENERIC_QUERIES = [
   `url:github.com ("I built" OR "I made" OR "we built") (clone OR alternative OR replacement) -is:retweet -is:reply`,
   `("reverse engineered" OR "clean-room" OR "clean room") (open source OR github) has:links -is:retweet -is:reply`,
   `("vibe coded" OR "built with Claude" OR "built with Cursor") (clone OR alternative OR rebuilt) has:links -is:retweet -is:reply`,
+  // The words people use when they launch one
+  `("free alternative to" OR "open source alternative to" OR "open-source alternative to" OR "open source version of" OR "free version of" OR "self-hosted alternative to") has:links -is:retweet -is:reply`,
+  `("I rebuilt" OR "I recreated" OR "I made my own" OR "we rebuilt" OR "I cloned" OR "built my own" OR "made a free" OR "built a free") (app OR alternative OR version OR clone) has:links -is:retweet -is:reply`,
+  `("without the subscription" OR "no subscription" OR "pay once" OR "instead of paying") ("open source" OR free OR github) (alternative OR clone OR replacement) has:links -is:retweet -is:reply`,
 ];
 const CHECKPOINTS = [["1h", 1], ["24h", 24], ["7d", 168]];
 const REPLY_WINDOW_H = 6.5 * 24; // recent search only reaches 7 days back
@@ -670,7 +674,8 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
   counts.audit_missing = audit.filter(a => a.reason === "repo missing").length;
   if (counts.audit_missing) log(`self-check: ${counts.audit_missing} cards link a GitHub repo but don't show one: ${audit.filter(a => a.reason === "repo missing").slice(0, 5).map(a => `${a.name} (${a.linked[0]})`).join(", ")}`, "warn");
 
-  counts.changed = groups.filter(g => g.history.length > 1 && g.history.at(-1).at === today).length;
+  // Rating changes in this scan (against the previous scan's cards), so churn is measurable
+  counts.changed = groups.filter(g => { const b = prevById.get(g.id); return b?.reception?.verdict && b.reception.verdict !== g.reception.verdict; }).length;
   if (counts.changed) log(`ratings: ${counts.changed} projects changed`);
   log(`groups: ${results.length} posts about ${groups.length} projects`);
   return {

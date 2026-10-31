@@ -7,7 +7,7 @@ import { githubRepo } from "./x.js";
 
 const HN = "https://hn.algolia.com/api/v1";
 const UA = { "User-Agent": "flattery/1.0 (+https://flattery.sala.company)" };
-const QUERIES = ["clone", "open source alternative", "reverse engineered", "reimplementation", "rewrite of", "vibe coded"];
+const QUERIES = ["clone", "open source alternative", "open-source alternative to", "free alternative to", "reverse engineered", "reimplementation", "rewrite of", "vibe coded", "self-hosted alternative", "I rebuilt", "clean room"];
 const strip = s => String(s || "").replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 
 async function json(url, log) {

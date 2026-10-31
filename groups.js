@@ -67,6 +67,11 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
     }
     const n = nameKey(e);
     if (n) link("name:" + n, e.id);
+    // The same account posting about the same clone again (often the very same post twice):
+    // one card, even when it has no name of its own
+    const what = norm(e.product?.name || e.original_clean || e.original);
+    const who = e.author?.id || e.author?.username;
+    if (!repo && !n && what.length >= 3 && who) link(`dup:${who}:${what}`, e.id);
   }
 
   // Suites: name-only groups (no repo) of 3+ posts

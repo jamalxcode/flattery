@@ -82,7 +82,9 @@ function liveStatus() {
 
 async function loadLive() {
   try {
-    const res = await fetch("data/latest.json?t=" + Date.now(), { cache: "no-store" });
+    // The slim file has just what the page shows; the full catalog is the fallback
+    let res = await fetch("data/site.json?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) res = await fetch("data/latest.json?t=" + Date.now(), { cache: "no-store" });
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     if (data.info?.source !== "x") throw new Error("old format");

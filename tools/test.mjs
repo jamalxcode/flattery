@@ -323,6 +323,16 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   for (const e of dup) e.reception = score(e, T0);
   assert.equal(buildGroups(dup, [], "2026-10-30", T0).length, 1);
 }
+// The same account posting about the same unnamed clone twice is one card; two people's
+// unnamed Figma clones stay two
+{
+  const un = (id, who, original) => ({ ...mkp(id, "", 10), author: { id: who, username: who, followers: 10 }, original_clean: original });
+  const posts = [un("u1", "dathac7", "CleanYourTV"), un("u2", "dathac7", "CleanYourTV"), un("u3", "onuro", "Figma"), un("u4", "eduarda", "Figma")];
+  for (const e of posts) e.reception = score(e, T0);
+  const gs2 = buildGroups(posts, [], "2026-10-30", T0);
+  assert.equal(gs2.find(g => g.posts.some(p => p.id === "u1")).posts.length, 2, "a repeated post is one card");
+  assert.notEqual(gs2.find(g => g.posts.some(p => p.id === "u3")), gs2.find(g => g.posts.some(p => p.id === "u4")), "different people's clones stay apart");
+}
 // A curator's reach counts at half weight once they post 3+ projects that aren't theirs
 {
   const cur = ["x1", "x2", "x3"].map((id, i) => ({ ...mkp(id, "Thing " + i + " app", 100), author: { id: "cur", username: "curator", followers: 10 } }));

@@ -139,6 +139,7 @@ jobs:
       - name: Write project, alternatives and stats pages
         run: |
           if [ -s data/latest.json ]; then
+            node tools/slim.mjs --data data/latest.json --out data/site.json
             node tools/pages.mjs --data data/latest.json --out .
             node tools/stats.mjs --data data/latest.json --out .
           else echo "no catalog yet"; fi
