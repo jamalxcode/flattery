@@ -9,6 +9,7 @@ import { X, githubRepo } from "../x.js";
 import { run } from "../pipeline.js";
 import { repoStats, pickReadmeImage } from "../github.js";
 import { reportHtml } from "../report.js";
+import { score } from "../reception.js";
 
 const { values: a } = parseArgs({ options: { html: { type: "string" } } });
 const H = 36e5, T0 = Date.parse("2026-10-30T12:00:00Z");
@@ -108,6 +109,13 @@ globalThis.fetch = realFetch;
 assert.equal(pickReadmeImage('<img src="./logo.svg"> ![b](https://img.shields.io/x) ![Title](docs/shot.png)', "a/b"), "https://raw.githubusercontent.com/a/b/HEAD/docs/shot.png");
 assert.equal(pickReadmeImage("![x](https://github.com/a/b/blob/main/s.png)", "a/b"), "https://raw.githubusercontent.com/a/b/main/s.png");
 assert.equal(pickReadmeImage("no images here", "a/b"), null);
+
+// GitHub takes priority: a huge repo behind a tiny X post is loved; a scam flag still wins
+const small = { created_at: new Date(T0 - 72 * H).toISOString(), author: { followers: 100 }, metrics: { likes: 7, reposts: 0, replies: 1, quotes: 0, bookmarks: 1, views: 900 },
+  github: { status: "ok", stars: 65300, downloads: 5700000, stars_history: [] } };
+assert.equal(score(small, T0).verdict, "well-received");
+assert.equal(score({ ...small, sentiment: { positive: 1, neutral: 2, negative: 7, sampled: 10, flags: ["scam-or-malware"] } }, T0).verdict, "stay-away");
+assert.equal(score({ ...small, github: { ...small.github, stars: 150, downloads: 0 } }, T0).verdict !== "too-early", true, "100+ stars is never new & untested");
 
 // Run 1
 const x = new X("token", log, { maxReads: 2000 });

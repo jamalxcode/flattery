@@ -8,10 +8,10 @@ A catalog of clones, reverse-engineered and reimagined versions of existing soft
 
 ## How it works
 
-A GitHub Action runs `tools/scan.mjs` every 2 hours and publishes the catalog with the site. Each run builds on the previous one, so nothing found is ever dropped (`pipeline.js`):
+A GitHub Action runs `tools/scan.mjs` every 8 hours and publishes the catalog with the site. Each run builds on the previous one, so nothing found is ever dropped (`pipeline.js`):
 
-1. **Refresh** — fresh likes, reposts, replies, quotes, bookmarks and views for known posts (100 per request): every run in a post's first week, daily up to 30 days, then weekly for good, so a rating can still change. Snapshots are kept at 1 hour, 24 hours and 7 days. Deleted posts stay in the catalog marked *removed*, with their text dropped.
-2. **Discover** — X recent search (`x.js`). Generic queries every run (`url:github.com` plus clone / reimplementation / reverse engineered / rebuilt…), plus product queries built from `products.js` (Photoshop, Figma, Notion…), six per run in turn, so all ~80 products are searched about once a day. Each query continues from the newest post it saw last time.
+1. **Refresh** — fresh likes, reposts, replies, quotes, bookmarks and views for known posts (100 per request): every run (every 8 hours) in a post's first week, daily up to 30 days, then weekly for good, so a rating can still change. Snapshots are kept at 1 hour, 24 hours and 7 days. Deleted posts stay in the catalog marked *removed*, with their text dropped.
+2. **Discover** — X recent search (`x.js`). Generic queries every run (`url:github.com` plus clone / reimplementation / reverse engineered / rebuilt…), plus product queries built from `products.js` (Photoshop, Figma, Notion…), 27 per run in turn, so all ~80 products are searched once a day. Each query continues from the newest post it saw last time.
 3. **Triage** — Claude Haiku (`haiku.js`) keeps only posts that announce a *clone*, *reverse-engineered*, *reimagined* or *port* of existing software, and names the original. News, opinions and "is there an alternative to…" posts are dropped.
 4. **Reactions** — for posts with some reach (20+ likes or 5+ reposts), up to 50 replies and 20 quote posts are read by Haiku, which labels each one positive, neutral or negative and lists red flags people raise (doesn't work, license/IP concern, scam or malware, just a wrapper, stolen code, overhyped, security issue). The author's own replies don't count, but repo links in them are picked up. Reactions are read again when replies have grown, while X's 7-day search still reaches them.
 5. **Confirm on GitHub** (`github.js`) — stars, forks, release downloads and daily star growth of the linked repo, 50 repos per GraphQL request. Renamed repos are followed; removed ones are marked.
@@ -29,20 +29,20 @@ The score (0–100) is a weighted mean of:
 
 | Part | Weight | What |
 |---|---|---|
-| approval | 30 | likes + 2×reposts + 1.5×bookmarks, log-scaled (≈5,000 = full marks) |
-| interest | 10 | engagement per view (3% = full marks), or per follower when views are missing |
-| sentiment | 35 | positive vs negative share of replies and quotes (needs 5+) |
-| github | 25 | stars, release downloads and star growth |
+| approval | 25 | likes + 2×reposts + 1.5×bookmarks, log-scaled (≈5,000 = full marks) |
+| interest | 5 | engagement per view (3% = full marks), or per follower when views are missing |
+| sentiment | 25 | positive vs negative share of replies and quotes (needs 5+) |
+| github | 45 | stars, release downloads and star growth |
 
 Penalties: being *ratioed* (more replies and quotes than likes), each red flag, and a serious red flag (scam/malware, stolen code, security issue).
 
 | Verdict | When |
 |---|---|
-| **Well received** | score 60+, mostly positive replies, **and** GitHub confirms it: 100+ stars or 500+ release downloads |
-| **Buzz, not confirmed** | the same on X, but no repo linked or one nobody uses yet |
-| **Mixed** | in between |
-| **Stay away** | score under 35, mostly negative replies, a serious red flag, or the repo was removed |
-| **Too early** | under 20 likes and 5 reposts, or under 24 hours old with no replies read yet |
+| **Loved** | GitHub counts most: 1,000+ stars or 10,000+ release downloads, whatever the X post did (unless the replies are clearly negative); or 100+ stars / 500+ downloads with a score of 50+ |
+| **Hyped, unproven** | score 60+ and mostly positive replies on X, but no repo or one nobody uses yet |
+| **Mixed** | in between, or a well-used repo with clearly negative replies |
+| **Don't touch** | a serious red flag raised by several people (scam/malware, stolen code, security issue), a removed repo, or a low score / mostly negative replies without GitHub to back it |
+| **New & untested** | under 20 likes and 5 reposts, or under 24 hours old with no replies read yet, and no real GitHub use |
 
 The thresholds live at the top of `reception.js`. This is crowd opinion, not a legal or technical judgement.
 
@@ -55,9 +55,9 @@ Repository secrets (**Settings → Secrets and variables → Actions**):
 
 The Actions token (`github.token`) covers the GitHub checks. Without the secrets the scan fails and the previous catalog is republished.
 
-**Cost:** X bills per post read, so each run is capped with `--max-reads` (600 in the workflow, ~7,200 a day at 12 runs). Lower it, or the run frequency in `.github/workflows/pages.yml`, to fit your plan. The run log ends with the reads, Haiku calls and tokens used. Haiku costs a few cents a day.
+**Cost:** X bills per post read, so each run is capped with `--max-reads` (1,000 in the workflow, at most ~3,000 a day at 3 runs). Lower it, or the run frequency in `.github/workflows/pages.yml`, to fit your plan. The run log ends with the reads, Haiku calls and tokens used. Haiku costs a few cents a day.
 
-**Timer:** GitHub's own schedule runs late and sometimes not at all, so, as for heat, a cron-job.org job can start the workflow through GitHub's API (`POST /repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches`, fine-grained token with *Actions: read and write*). Set it to every 2 hours. To run a scan by hand: **Actions → Scan and deploy → Run workflow**.
+**Timer:** GitHub's own schedule runs late and sometimes not at all, so, as for heat, a cron-job.org job can start the workflow through GitHub's API (`POST /repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches`, fine-grained token with *Actions: read and write*). Set it to every 8 hours. To run a scan by hand: **Actions → Scan and deploy → Run workflow**.
 
 ## Running locally
 
