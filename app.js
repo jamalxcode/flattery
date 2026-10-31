@@ -27,6 +27,16 @@ $("surprise").addEventListener("click", () => {
   if (list.length) $("live").flattery?.open(list[Math.floor(Math.random() * list.length)].id);
 });
 
+// A shared link (#p=<id>) opens that project once the catalog has loaded
+let hashOpened = false;
+function openFromHash() {
+  const m = location.hash.match(/^#p=(.+)$/);
+  if (!m || hashOpened) return;
+  hashOpened = true;
+  $("live").flattery?.open(decodeURIComponent(m[1]));
+}
+window.addEventListener("hashchange", () => { hashOpened = false; openFromHash(); });
+
 function ago(ms) {
   const m = Math.round(ms / 60000);
   return m < 1 ? "just now" : m === 1 ? "1 minute ago" : m < 120 ? `${m} minutes ago` : `${Math.round(m / 60)} hours ago`;
@@ -48,7 +58,8 @@ async function loadLive() {
     if (data.info?.source !== "x") throw new Error("old format");
     if (!live || data.info.generated_iso !== live.info.generated_iso) {
       live = data;
-      renderReport($("live"), live.groups || live.results, live.info, { search: $("search") });
+      renderReport($("live"), live.groups || live.results, live.info, { search: $("search"), base: "data/" });
+      openFromHash();
     }
     liveStatus();
   } catch {

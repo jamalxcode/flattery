@@ -1,6 +1,7 @@
 // Renders the catalog as an app store: hero with the rating legend, a shelf of the best
 // loved, filters, a grid of cards, and a detail sheet per clone. Shared by the live page
 // and the standalone report. opts.search: an <input> outside root to filter with.
+// opts.base: where the catalog's files (thumbnails) live, relative to the page ("data/").
 const RATINGS = [
   ["well-received", "❤️", "Loved", "Real use on GitHub (the poster's own repo, lots of stars or downloads) and people aren't against it.", "loved"],
   ["unconfirmed", "🔥", "Hyped, unproven", "Lots of buzz on X, but no repo or one nobody uses yet.", "hype"],
@@ -43,8 +44,9 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const art = e => {
     const n = name(e);
     const size = n.length <= 9 ? "l" : n.length <= 16 ? "m" : "s";
-    const shot = e.github?.image && e.github.status !== "gone"
-      ? `<img src="${esc(e.github.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+    // Our stored copy when there is one; the README's own image until then
+    const src = e.thumb ? (opts.base || "") + e.thumb : e.github?.status !== "gone" && e.github?.image;
+    const shot = src ? `<img src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
     return `<div class="tile" style="--h:${hue(n)}"><span class="tile-mark ${size}">${esc(n)}</span>${what(e) ? `<span class="tile-of">≈ ${esc(what(e))}</span>` : ""}</div>${shot}`;
   };
   const mini = s => {
@@ -65,6 +67,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
         </div>
         <div class="legend"><h2>Ratings</h2><div data-r="legend"></div></div>
       </section>
+      <section class="fresh" data-r="riseWrap"><h2 class="section-title">📈 Rising on GitHub</h2><ul class="shelf" data-r="rise"></ul></section>
       <section class="fresh" data-r="upWrap"><h2 class="section-title">⬆ Just promoted</h2><ul class="shelf" data-r="up"></ul></section>
       <section class="fresh" data-r="shelfWrap"><h2 class="section-title">❤️ Most loved</h2><ul class="shelf" data-r="shelf"></ul></section>
       <section id="apps">
@@ -81,9 +84,12 @@ function renderReport(root, DATA, INFO, opts = {}) {
         </div>
         <ul class="grid" data-r="grid"></ul>
       </section>
+      <details class="rejected" data-r="rejWrap"><summary>Recently left out by the filter</summary>
+        <p class="note-small">Popular posts Claude Haiku judged not to be clone announcements. If one should be here, add it with a name search or overrides.json.</p>
+        <ul class="posts" data-r="rej"></ul></details>
       <dialog class="sheet" data-r="sheet"></dialog>`;
     root.dataset.ready = "1";
-    root._filter = "all";
+    root._filter = "rated";
     const rerender = () => renderReport(root, root._data, root._info, opts);
     root.querySelectorAll("select,[data-r=q]").forEach(el => el.addEventListener("input", rerender));
     search?.addEventListener("input", rerender);
@@ -99,7 +105,16 @@ function renderReport(root, DATA, INFO, opts = {}) {
       if (o) root.flattery.open(o.dataset.open);
     });
     const sheet = root.querySelector("[data-r=sheet]");
-    sheet.addEventListener("click", ev => { if (ev.target === sheet || ev.target.closest(".close")) sheet.close(); });
+    sheet.addEventListener("click", ev => {
+      if (ev.target === sheet || ev.target.closest(".close")) sheet.close();
+      const share = ev.target.closest("[data-share]");
+      if (share) {
+        const url = location.href.split("#")[0] + "#p=" + encodeURIComponent(share.dataset.share);
+        navigator.clipboard?.writeText(url).then(() => { share.textContent = "Link copied"; }, () => { share.textContent = url; });
+      }
+    });
+    // Each project has its own link (#p=<id>); closing the sheet clears it
+    sheet.addEventListener("close", () => { if (location.hash.startsWith("#p=")) history.replaceState(null, "", location.pathname + location.search); });
   }
   root._data = DATA;
   root._info = INFO;
@@ -120,6 +135,17 @@ function renderReport(root, DATA, INFO, opts = {}) {
     <div class="art">${art(e)}</div><span class="name">${esc(name(e))}</span>
     <span class="meta">❤️ ${e.reception.score} · ★ ${num(e.github?.stars)} · ${esc(what(e) || e.kind)}</span></button></li>`).join("");
 
+  // Rising: the fastest-growing repos that count (the poster's own), by stars a day
+  const growth = e => {
+    const h = e.github?.stars_history || [];
+    const days = h.length > 1 ? (Date.parse(h.at(-1).at) - Date.parse(h[0].at)) / 864e5 : 0;
+    return days >= 0.9 && e.reception.repo_counted ? (h.at(-1).stars - h[0].stars) / days : 0;
+  };
+  const rising = live.filter(e => growth(e) >= 5).sort((a, b) => growth(b) - growth(a));
+  $("riseWrap").hidden = !rising.length;
+  $("rise").innerHTML = rising.slice(0, 12).map(e => `<li><button type="button" data-open="${esc(e.id)}"><div class="art">${art(e)}</div><span class="name">${esc(name(e))}</span>
+    <span class="meta">+${num(Math.round(growth(e)))} ★ a day · ${rating(e.reception.verdict)[1]} ${esc(what(e) || e.kind)}</span></button></li>`).join("");
+
   const promoted = live.filter(e => moved(e, 7)?.up).sort((a, b) => b.reception.score - a.reception.score);
   $("upWrap").hidden = !promoted.length;
   $("up").innerHTML = promoted.slice(0, 12).map(e => {
@@ -128,7 +154,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <span class="meta">${pe} → ${ne} · ${esc(what(e) || e.kind)}</span></button></li>`;
   }).join("");
 
-  const chips = [["all", "All", live.length], ...RATINGS.map(([v, emo, n]) => [v, `${emo} ${n}`, by(v).length])];
+  const chips = [["rated", "Rated", live.length - by("too-early").length], ["all", "Everything", live.length], ...RATINGS.map(([v, emo, n]) => [v, `${emo} ${n}`, by(v).length])];
   const gone = DATA.length - live.length;
   if (gone) chips.push(["gone", "🗑 Removed", gone]);
   $("filters").innerHTML = chips.map(([v, t, n]) => `<button type="button" class="filter" data-filter="${v}" aria-pressed="${root._filter === v}">${t} <span class="n">${n}</span></button>`).join("");
@@ -141,7 +167,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
 
   const q = (search || $("q")).value.trim().toLowerCase();
   const f = root._filter;
-  let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || e.reception.verdict === f)) &&
+  let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? e.reception.verdict !== "too-early" : e.reception.verdict === f))) &&
     (!pick || what(e) === pick));
   if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.summary, e.author?.username, e.repo, e.product]).toLowerCase().includes(q));
   const sorts = {
@@ -167,9 +193,16 @@ function renderReport(root, DATA, INFO, opts = {}) {
       </div></article></li>`;
   }).join("") : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
 
+  const rej = [...(INFO.rejected_samples || [])].reverse().slice(0, 30);
+  $("rejWrap").hidden = !rej.length;
+  $("rej").innerHTML = rej.map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc(p.at)}</span><small>${esc(p.text)}</small></li>`).join("");
+
   root.flattery = {
     open(id) {
-      const e = DATA.find(x => x.id === id);
+      // By card id, by one of its posts, or by project name, so old links survive id changes
+      const key = s => String(s || "").toLowerCase().replace(/^(name|repo|post):/, "").replace(/[^a-z0-9]/g, "");
+      const e = DATA.find(x => x.id === id) || DATA.find(x => x.posts?.some(p => p.id === id)) ||
+        DATA.find(x => key(x.project) === key(id) || key(x.repo?.split("/")[1]) === key(id));
       if (!e) return;
       const [, emo, rname, rdesc, cls] = rating(e.reception.verdict);
       const m = e.metrics, s = e.sentiment, g = e.github && e.github.status !== "gone" ? e.github : null;
@@ -192,15 +225,19 @@ function renderReport(root, DATA, INFO, opts = {}) {
             ${e.repo && cls !== "danger" ? `<a class="primary" href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
             <a${e.repo && cls !== "danger" ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener">Open the post on X</a>
             ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow">☠️ Repo (don't run it)</a>` : ""}
+            <a href="#p=${encodeURIComponent(e.id)}" data-share="${esc(e.id)}" onclick="event.preventDefault()">Copy link</a>
           </div>
           ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>@${esc(e.author.username)} · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
           ${e.group ? `<div><h4>${e.posts.length} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
             <a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc((p.created_at || "").slice(0, 10))}</span>
             <small>${esc(p.text) || "removed"}</small></li>`).join("")}</ul></div>` : ""}
           <div><h4>On X${e.group ? " · all posts" : ""}</h4><div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div></div>
-          ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes</h4>${mini(s)}
+          ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes${e.reception.confidence === "low" ? ' · <span class="low">low confidence</span>' : ""}</h4>${mini(s)}
             <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
-          ${s?.flags?.length ? `<div><h4>Red flags people raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div></div>` : ""}
+          ${s?.flags?.length ? `<div><h4>Red flags people raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div>
+            ${Object.entries(s.evidence || {}).length ? `<ul class="posts evidence">${Object.entries(s.evidence).flatMap(([fl, list]) => list.map(r => `<li>
+              <span class="chip flag">${esc(fl.replaceAll("-", " "))}</span> <a href="${esc(r.url)}" target="_blank" rel="noopener">@${esc(r.author)}</a>
+              <small>${esc(r.text)}</small></li>`)).join("")}</ul>` : ""}</div>` : ""}
           ${g ? `<div><h4>On GitHub · ${esc(e.repo)}</h4>${e.reception.repo_counted === false ? `<p class="note-small" style="margin-bottom:8px">This repo isn't the poster's own, so its stars and downloads don't count toward the rating.</p>` : ""}<div class="figures">${fig(num(g.stars), "stars")}${fig(num(g.forks), "forks")}${fig(num(g.downloads), "downloads")}${growth != null ? fig((growth >= 0 ? "+" : "") + num(growth), "stars a day") : ""}${fig(esc(g.license || "none"), "license")}</div>
             ${g.status === "archived" ? '<p class="note-small">This repo is archived.</p>' : ""}</div>`
             : `<p class="note-small">${e.repo ? "The linked repo was removed." : "No GitHub repo linked yet, so it can't be confirmed."}</p>`}
@@ -208,6 +245,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <p class="note-small">Score parts: ${Object.entries(e.reception.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}. Crowd opinion, not a legal or technical judgement.</p>
         </div>`;
       if (!sheet.open) sheet.showModal();
+      if (location.protocol !== "file:") history.replaceState(null, "", "#p=" + encodeURIComponent(id));
       sheet.scrollTop = 0;
     },
   };

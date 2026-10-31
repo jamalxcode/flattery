@@ -41,9 +41,12 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
   const catalog = new Map(fromX ? prev.results.map(e => [e.id, e]) : []);
   const sinceIds = { ...(fromX && prev.info.since_ids) };
   const rejected = new Set(fromX ? prev.info.rejected || [] : []);
+  // The latest rejections, shown on the page so wrong ones can be spotted
+  const rejectedSamples = fromX ? [...(prev.info.rejected_samples || [])] : [];
   // Whether full-archive search worked last time; a refusal is retried after a week
   let archiveState = fromX ? prev.info.archive : undefined;
   let canArchive = !(archiveState?.ok === false && now - Date.parse(archiveState.checked) < WEEK);
+  const runInfo = {};
   const counts = { refreshed: 0, removed: 0, searched: 0, candidates: 0, added: 0, rejected: 0, reactions: 0, repos: 0 };
 
   const setMetrics = (e, p) => {
@@ -153,6 +156,38 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       }
       log(`search for "${term}": ${posts.length} posts, ${kept} new candidates`);
     }
+
+    // Repo searches: posts linking a known, starred repo, to find its original announcement
+    // and the real discussion, not only the curator post that brought it in. Weekly per repo.
+    const repoSearched = { ...(fromX && prev.info.repo_searched) };
+    const repos = [...new Map([...catalog.values()].filter(e => e.status === "ok" && e.repo && e.github?.stars >= 50 && e.github.status !== "gone")
+      .map(e => [e.repo.toLowerCase(), e])).values()]
+      .filter(e => !repoSearched[e.repo.toLowerCase()] || now - Date.parse(repoSearched[e.repo.toLowerCase()]) > WEEK)
+      .sort((a, b) => b.github.stars - a.github.stars)
+      .slice(0, opts.repoSearches ?? 5);
+    for (const e of repos) {
+      if (outOfTime()) break;
+      const q = `url:"github.com/${e.repo}" -is:retweet`;
+      let posts;
+      try {
+        ({ posts } = await x.search(q, { archive: canArchive, startTime: canArchive ? iso(now - 30 * 864e5) : undefined, max: opts.repoSearchMax ?? 50 }));
+      } catch (err) {
+        if (!(err instanceof ArchiveError)) throw err;
+        canArchive = false;
+        archiveState = { ok: false, checked: today };
+        ({ posts } = await x.search(q, { max: opts.repoSearchMax ?? 50 }));
+      }
+      repoSearched[e.repo.toLowerCase()] = today;
+      counts.searched++;
+      let kept = 0;
+      for (const p of posts) {
+        if (p.is_reply_or_repost || catalog.has(p.id) || rejected.has(p.id)) continue;
+        if (!fresh.has(p.id)) { fresh.set(p.id, { ...p, found_by: [] }); kept++; }
+        fresh.get(p.id).found_by.push(`repo: ${e.repo}`);
+      }
+      log(`repo search ${e.repo}: ${posts.length} posts, ${kept} new candidates`);
+    }
+    runInfo.repo_searched = repoSearched;
     counts.candidates = fresh.size;
 
     // 3. Triage
@@ -161,7 +196,13 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       for (const p of fresh.values()) {
         const t = verdicts.get(p.id);
         if (!t) continue; // not classified this run (refusal, error): seen again next time it turns up
-        if (t.kind === "not-a-clone") { rejected.add(p.id); counts.rejected++; continue; }
+        if (t.kind === "not-a-clone") {
+          rejected.add(p.id);
+          counts.rejected++;
+          if (p.metrics.likes >= 10) rejectedSamples.push({ id: p.id, url: `https://x.com/${p.author.username || "i"}/status/${p.id}`,
+            author: p.author.username, likes: p.metrics.likes, text: p.text.slice(0, 200), at: today });
+          continue;
+        }
         const { is_reply_or_repost, ...post } = p;
         catalog.set(p.id, {
           ...post,
@@ -212,8 +253,8 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       const repos = [...new Set([...e.repos, ...own.flatMap(r => r.repos)])];
       if (repos.length > e.repos.length) { e.repos = repos; e.repo ||= repos[0]; }
       const reactions = [
-        ...replies.filter(r => r.author.id !== e.author.id).map(r => ({ text: r.text, kind: "reply" })),
-        ...quotes.filter(q => q.author.id !== e.author.id).map(q => ({ text: q.text, kind: "quote" })),
+        ...replies.filter(r => r.author.id !== e.author.id).map(r => ({ text: r.text, kind: "reply", author: r.author.username, url: `https://x.com/${r.author.username || "i"}/status/${r.id}` })),
+        ...quotes.filter(q => q.author.id !== e.author.id).map(q => ({ text: q.text, kind: "quote", author: q.author.username, url: `https://x.com/${q.author.username || "i"}/status/${q.id}` })),
       ];
       const s = await haiku.sentiment(e, reactions);
       if (s) {
@@ -225,6 +266,12 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
   } catch (err) {
     if (!(err instanceof BudgetError)) throw err;
     log(`stopped reading X: ${err.message}`, "warn");
+  }
+
+  // overrides.json can give a post the repo it didn't link
+  for (const [id, repo] of Object.entries(opts.overrides?.repo || {})) {
+    const e = catalog.get(id);
+    if (e && !e.repo) { e.repo = repo; e.repos = [...new Set([...(e.repos || []), repo])]; }
   }
 
   // 5. Confirm on GitHub
@@ -264,7 +311,12 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
     if (want.length) log(`images: ${found} of ${want.length} READMEs had a screenshot`);
   }
 
-  // 6. Score
+  // 6. Score (overrides.json can say whose a repo is)
+  const owned = new Map(Object.entries(opts.overrides?.owned || {}).map(([k, v]) => [k.toLowerCase(), v]));
+  for (const e of catalog.values()) {
+    if (e.repo && owned.has(e.repo.toLowerCase())) e.repo_owned = owned.get(e.repo.toLowerCase());
+    else delete e.repo_owned;
+  }
   // and keep each change of rating, so the page can show what was promoted or demoted
   for (const e of catalog.values()) {
     e.reception = score(e, now);
@@ -277,7 +329,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
 
   const results = [...catalog.values()].sort((a, b) => b.reception.score - a.reception.score || b.metrics.likes - a.metrics.likes);
   // 7. Merge posts about the same project into one entry each; these are what the page shows
-  const groups = buildGroups(results, fromX ? prev.groups || [] : [], today, now);
+  const groups = buildGroups(results, fromX ? prev.groups || [] : [], today, now, opts.overrides);
   counts.changed = groups.filter(g => g.history.length > 1 && g.history.at(-1).at === today).length;
   if (counts.changed) log(`ratings: ${counts.changed} projects changed`);
   log(`groups: ${results.length} posts about ${groups.length} projects`);
@@ -289,6 +341,8 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       since_ids: sinceIds,
       rejected: [...rejected].slice(-5000),
       archive: archiveState,
+      rejected_samples: rejectedSamples.slice(-60),
+      repo_searched: runInfo.repo_searched || (fromX ? prev.info.repo_searched : undefined),
       counts,
     },
   };

@@ -20,7 +20,10 @@ export function nameKey(e) {
 }
 
 // posts: per-post entries, already scored. prevGroups: last run's groups, for history.
-export function buildGroups(posts, prevGroups = [], today = new Date().toISOString().slice(0, 10), now = Date.now()) {
+// overrides (overrides.json): attach post ids to a project, keep some separate, hide some.
+export function buildGroups(posts, prevGroups = [], today = new Date().toISOString().slice(0, 10), now = Date.now(), overrides = {}) {
+  const hidden = new Set(overrides.hide || []), separate = new Set(overrides.separate || []);
+  posts = posts.filter(e => !hidden.has(e.id));
   // Union-find over post ids
   const parent = new Map(posts.map(e => [e.id, e.id]));
   const find = id => { while (parent.get(id) !== id) { parent.set(id, parent.get(parent.get(id))); id = parent.get(id); } return id; };
@@ -28,6 +31,9 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
   const byKey = new Map();
   const link = (key, id) => byKey.has(key) ? join(byKey.get(key), id) : byKey.set(key, id);
   for (const e of posts) {
+    if (separate.has(e.id)) continue;
+    const to = overrides.attach?.[e.id];
+    if (to) link(to.includes("/") ? "repo:" + to.toLowerCase() : "name:" + norm(to), e.id);
     const repo = e.repo?.toLowerCase();
     if (repo) {
       link("repo:" + repo, e.id);
@@ -47,7 +53,7 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
     if (n && size.get(r) >= 3 && !hasRepo.has(r) && !suites.has(n)) suites.set(n, r);
   }
   for (const e of posts) {
-    if (e.repo || !suites.size) continue;
+    if (e.repo || !suites.size || separate.has(e.id) || overrides.attach?.[e.id]) continue;
     const r = find(e.id);
     if (size.get(r) !== 1) continue; // already part of a project
     const own = norm(e.project), text = norm(e.text);
@@ -72,7 +78,7 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
   }
   for (const e of posts) {
     const r = find(e.id);
-    if (e.repo || grown.get(r) !== 1) continue;
+    if (e.repo || grown.get(r) !== 1 || separate.has(e.id) || overrides.attach?.[e.id]) continue;
     const first = norm(String(e.project || "").split(/,|،|\band\b|&|\//i)[0]);
     const own = norm(e.project);
     let target = index.get(first), best = 0;
@@ -100,7 +106,11 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
     const sum = k => pool.reduce((s, e) => s + (e.metrics[k] || 0), 0);
     const sentiments = pool.map(e => e.sentiment).filter(s => s?.sampled);
     const names = new Map();
-    for (const e of pool) if (e.project) names.set(e.project, (names.get(e.project) || 0) + e.metrics.likes + 1);
+    for (const e of pool) {
+      const to = overrides.attach?.[e.id];
+      const n = e.project || (to && !to.includes("/") ? to : "");
+      if (n) names.set(n, (names.get(n) || 0) + e.metrics.likes + 1);
+    }
     const project = [...names].sort((a, b) => b[1] - a[1])[0]?.[0] || lead.project;
     const key = anyRepo?.repo ? "repo:" + anyRepo.repo.toLowerCase() : nameKey(lead) ? "name:" + nameKey(lead) : "post:" + lead.id;
     const id = list.length > 1 ? key : lead.id;
@@ -121,6 +131,7 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
         negative: sentiments.reduce((s, x) => s + x.negative, 0),
         sampled: sentiments.reduce((s, x) => s + x.sampled, 0),
         flags: [...new Set(sentiments.flatMap(x => x.flags || []))],
+        evidence: Object.assign({}, ...sentiments.map(x => x.evidence || {})),
         summary: [...sentiments].sort((a, b) => b.sampled - a.sampled)[0].summary,
       } : undefined,
       found_by: [...new Set(list.flatMap(e => e.found_by || []))],

@@ -28,6 +28,9 @@ export const STRONG = { stars: 1000, downloads: 10000 };
 // Minimum reach before a post is judged at all, and replies fetched.
 export const MIN_REACH = { likes: 20, reposts: 5 };
 
+// Replies needed before their tone is trusted; below this it weighs less and is "low confidence"
+export const CONFIDENT_REPLIES = 15;
+
 export const reached = m => m.likes >= MIN_REACH.likes || m.reposts >= MIN_REACH.reposts;
 
 // A linked repo counts as the poster's when its owner matches their X handle or name, or
@@ -36,7 +39,7 @@ export const reached = m => m.likes >= MIN_REACH.likes || m.reposts >= MIN_REACH
 export const NEW_REPO_DAYS = 120;
 const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 export function ownsRepo(entry, gh = entry.github) {
-  if (entry.repo_owned) return true; // a merged entry whose repo belongs to one of its posters
+  if (entry.repo_owned != null) return entry.repo_owned; // set by a merge or by overrides.json
   const rawOwner = (gh?.repo || entry.repo || "").split("/")[0];
   const owner = norm(rawOwner);
   if (!owner) return false;
@@ -68,10 +71,11 @@ export function score(entry, now = Date.now()) {
   const engaged = m.likes + m.reposts + m.bookmarks;
   parts.interest = round(100 * (m.views ? Math.min(1, engaged / m.views / 0.03) : m.likes && entry.author.followers ? Math.min(1, engaged / entry.author.followers / 0.05) : 0));
 
-  let net = null;
+  let net = null, confidence = null;
   if (s?.sampled >= 5) {
-    net = (s.positive - s.negative) / s.sampled;
-    parts.sentiment = round(50 + 50 * net);
+    parts.sentiment = round(50 + 50 * (s.positive - s.negative) / s.sampled);
+    confidence = s.sampled >= CONFIDENT_REPLIES ? "ok" : "low";
+    if (confidence === "ok") net = (s.positive - s.negative) / s.sampled;
   }
   let confirmed = false, strong = false;
   if (gh) {
@@ -82,7 +86,7 @@ export function score(entry, now = Date.now()) {
   }
 
   // Weighted mean over the parts we have
-  const weights = { approval: 25, interest: 5, sentiment: 25, github: 45 };
+  const weights = { approval: 25, interest: 5, sentiment: confidence === "low" ? 10 : 25, github: 45 };
   let sum = 0, wsum = 0;
   for (const [k, w] of Object.entries(weights)) if (parts[k] != null) { sum += parts[k] * w; wsum += w; }
   let total = wsum ? sum / wsum : 0;
@@ -118,5 +122,5 @@ export function score(entry, now = Date.now()) {
     if (!confirmed && !(linked && !gh)) reasons.push(gh ? `repo has ${gh.stars} stars and ${gh.downloads} downloads (needs ${CONFIRM.stars} stars or ${CONFIRM.downloads} downloads)` : "no GitHub repo linked");
   } else verdict = "mixed";
 
-  return { score: total, verdict, parts, net: net == null ? null : Math.round(net * 100) / 100, confirmed, repo_counted: !!gh, reasons };
+  return { score: total, verdict, parts, net: net == null ? null : Math.round(net * 100) / 100, confirmed, repo_counted: !!gh, confidence, reasons };
 }

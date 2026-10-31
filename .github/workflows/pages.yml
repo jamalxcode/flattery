@@ -36,7 +36,8 @@ on:
       max_reads:
         description: "Most X posts to read in this run (X bills per post)"
         default: "1000"
-permissions: { contents: write, pages: write, id-token: write }  # contents: write saves the catalog to the data branch
+# contents: write saves the catalog to the data branch; issues: write opens an issue when scans fail
+permissions: { contents: write, pages: write, id-token: write, issues: write }
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
   deploy:
@@ -44,8 +45,8 @@ jobs:
     timeout-minutes: 20
     environment: { name: github-pages, url: "${{ steps.deployment.outputs.page_url }}" }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - uses: actions/configure-pages@v5
@@ -60,7 +61,9 @@ jobs:
           if [ $has -eq 0 ]; then
             git fetch -q --depth 1 origin data
             git show FETCH_HEAD:latest.json > "$RUNNER_TEMP/prev.json"
-            echo "loaded the catalog from the data branch"
+            mkdir -p data
+            git archive FETCH_HEAD thumbs 2>/dev/null | tar -x -C data || true  # stored thumbnails
+            echo "loaded the catalog from the data branch ($(ls data/thumbs 2>/dev/null | wc -l) thumbnails)"
           elif [ $has -eq 2 ]; then
             # No data branch yet: take the published copy once, while moving over
             code=$(curl -sS -o "$RUNNER_TEMP/prev.json" -w '%{http_code}' "${{ steps.pages.outputs.base_url }}/data/latest.json" || echo 000)
@@ -78,6 +81,8 @@ jobs:
           GITHUB_TOKEN: "${{ github.token }}"
           SEARCH: "${{ inputs.search }}"
           SEARCH_DAYS: "${{ inputs.search_days || '21' }}"
+          SITE_URL: "${{ steps.pages.outputs.base_url }}/"
+          X_COST_PER_READ: "${{ vars.X_COST_PER_READ }}"  # optional repo variable, e.g. 0.005
         run: |
           mkdir -p data
           BACKFILL="${{ inputs.backfill_days || '0' }}"
@@ -95,13 +100,29 @@ jobs:
           if git fetch -q --depth 1 origin data 2>/dev/null; then git worktree add -q -B data "$store" FETCH_HEAD
           else git worktree add -q --orphan -b data "$store"; fi
           cp data/latest.json "$store/latest.json"
+          if [ -d data/thumbs ]; then mkdir -p "$store/thumbs" && cp -r data/thumbs/. "$store/thumbs/"; fi
           cd "$store"
-          git add latest.json
+          git add -A
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "Catalog $(date -u +%Y-%m-%dT%H:%MZ)" || { echo "catalog unchanged"; exit 0; }
           git push -q origin data
+      # Tell the owner when scans fail, through one open issue; close it once they work again
+      - name: Report scan health
+        if: always() && steps.scan.conclusion == 'success'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          title="Flattery scans are failing"
+          num=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number -q '.[0].number' || true)
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ "${{ steps.scan.outputs.ok }}" = "true" ]; then
+            [ -n "$num" ] && gh issue close "$num" -R "$GITHUB_REPOSITORY" --comment "Scans work again: $run" || true
+          elif [ -n "$num" ]; then
+            gh issue comment "$num" -R "$GITHUB_REPOSITORY" --body "Failed again: $run" || true
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "The scheduled scan failed and the previous catalog was republished. Log: $run" || true
+          fi
       - run: rm -rf node_modules
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with: { path: . }
       - id: deployment
         uses: actions/deploy-pages@v4

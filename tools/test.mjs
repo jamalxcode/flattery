@@ -11,6 +11,7 @@ import { repoStats, pickReadmeImage } from "../github.js";
 import { reportHtml } from "../report.js";
 import { score } from "../reception.js";
 import { buildGroups } from "../groups.js";
+import { Haiku } from "../haiku.js";
 
 const { values: a } = parseArgs({ options: { html: { type: "string" } } });
 const H = 36e5, T0 = Date.parse("2026-10-30T12:00:00Z");
@@ -124,6 +125,22 @@ assert.equal(score(curator, T0).verdict, "too-early");
 assert.equal(score(curator, T0).repo_counted, false);
 assert.equal(score({ ...curator, github: { ...small.github, created: new Date(T0 - 30 * 864e5).toISOString().slice(0, 10) } }, T0).verdict, "well-received");
 
+// Red flags need two different accounts, and keep their replies as evidence
+const hk = Object.create(Haiku.prototype);
+hk.ask = async () => ({ labels: [{ n: 1, sentiment: "negative" }, { n: 2, sentiment: "negative" }, { n: 3, sentiment: "negative" }],
+  flags: [{ flag: "scam-or-malware", examples: [1, 2] }, { flag: "overhyped", examples: [3, 4] }], summary: "s" });
+const sent = await hk.sentiment({ author: { username: "x" }, text: "t" }, [
+  { text: "malware!", kind: "reply", author: "a", url: "u1" }, { text: "virus", kind: "reply", author: "b", url: "u2" },
+  { text: "meh", kind: "reply", author: "c", url: "u3" }, { text: "meh again", kind: "reply", author: "c", url: "u4" }]);
+assert.deepEqual(sent.flags, ["scam-or-malware"], "one account repeating itself isn't a pattern");
+assert.equal(sent.evidence["scam-or-malware"].length, 2);
+assert.equal(sent.evidence["scam-or-malware"][0].url, "u1");
+// Fewer than 15 replies: tone is low confidence and can't decide the rating
+const few = { ...small, github: undefined, repo: null, metrics: { likes: 300, reposts: 50, replies: 10, quotes: 0, bookmarks: 20, views: 30000 },
+  sentiment: { positive: 0, neutral: 2, negative: 8, sampled: 10, flags: [] } };
+assert.equal(score(few, T0).confidence, "low");
+assert.notEqual(score(few, T0).verdict, "stay-away");
+
 // Run 1
 const x = new X("token", log, { maxReads: 2000 });
 const githubImage = async repo => repo === "alice/webshop" ? "https://raw.githubusercontent.com/alice/webshop/HEAD/shot.png" : null;
@@ -145,7 +162,7 @@ const firstReads = x.reads;
 deleted = new Set(["p3"]);
 stars = { ...stars, "alice/webshop": 3500 };
 const x2 = new X("token", log, { maxReads: 2000 });
-const r2 = await run({ ...r1, info: { ...r1.info } }, { perQuery: 50, productsPerRun: 1, rotate: 1 }, { x: x2, haiku, githubStats, githubImage, log, now: T0 + 48 * H });
+const r2 = await run({ ...r1, info: { ...r1.info } }, { perQuery: 50, productsPerRun: 1, rotate: 1, repoSearches: 0 }, { x: x2, haiku, githubStats, githubImage, log, now: T0 + 48 * H });
 assert.equal(r2.results.length, 4, "nothing is dropped");
 assert.equal(by(r2, "p3").status, "gone");
 assert.equal(by(r2, "p3").text, "", "removed posts lose their text");
@@ -163,6 +180,7 @@ const r3 = await run(r2, { perQuery: 50, productsPerRun: 1, backfillDays: 21, ma
 assert.ok(by(r3, "p9"), "backfill finds the older post");
 assert.ok(by(r3, "p9").found_by.some(f => f.startsWith("backfill")));
 assert.ok(reads.some(r => r.startsWith("/2/tweets/search/all?conversation_id:p9")), "old threads are read through the archive");
+assert.ok(reads.some(r => r.includes('url:"github.com/alice/webshop"')), "known starred repos are searched by URL");
 
 // Without full-archive access the run carries on
 archiveRefused = true;
