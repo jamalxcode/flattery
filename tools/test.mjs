@@ -283,6 +283,17 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   assert.equal(buildGroups(cur, [], "2026-10-30", T0).find(g => g.posts[0].id === "x1").metrics.likes, 50);
 }
 
+// A serious flag judged under older rules is read again, even when replies haven't grown
+{
+  const old = JSON.parse(JSON.stringify(r1));
+  const p1 = old.results.find(e => e.id === "p1");
+  p1.sentiment = { ...p1.sentiment, flags: ["stolen-code"], at: new Date(T0).toISOString() };
+  delete p1.sentiment.v;
+  const before = reads.length;
+  await run(old, { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, { x: new X("token", log, { maxReads: 3000 }), haiku, githubStats, log, now: T0 + 2 * H });
+  assert.ok(reads.slice(before).some(r => r.includes("conversation_id:p1")), "the flagged post's replies are read again");
+}
+
 console.log(`ok: ${r1.results.length} posts, ${firstReads} + ${x2.reads} X reads`);
 for (const e of r2.results) console.log(`  ${String(e.reception.score).padStart(3)} ${e.reception.verdict.padEnd(13)} ${e.id} ${JSON.stringify(e.reception.parts)} ${e.reception.reasons.join("; ")}`);
 
