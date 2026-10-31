@@ -2,127 +2,164 @@
 
 > “Imitation is the sincerest form of flattery.” Hence the name: every project here imitates software you already know.
 
-A catalog of clones, reverse-engineered and reimagined versions of existing software, found on X and ranked by how people received them.
+An app store of free clones of the apps you pay for: reverse-engineered, reimagined, white-room and vibe-coded copies. They're found on X and Hacker News, rated by how people reacted, and confirmed with GitHub stars and downloads.
 
-**See it:** https://flattery.sala.company/ (also [`data/latest.json`](https://flattery.sala.company/data/latest.json), [`data/feed.xml`](https://flattery.sala.company/data/feed.xml) and a standalone [`data/latest.html`](https://flattery.sala.company/data/latest.html))
+**See it:** https://flattery.sala.company/ · [Free alternatives](https://flattery.sala.company/alternatives/) · [Stats](https://flattery.sala.company/stats/) · [RSS](https://flattery.sala.company/data/feed.xml) · [JSON](https://flattery.sala.company/data/latest.json)
 
-Everything runs by itself: nobody reviews listings, objections or the newsletter by hand.
+Everything runs by itself. Nobody reviews listings, ratings, objections or the newsletter by hand: a scan every 8 hours finds, rates and re-rates projects, and the site rebuilds itself.
 
-## How it works
+## The site
 
-A GitHub Action runs `tools/scan.mjs` every 8 hours and publishes the catalog with the site. Each run builds on the previous one, so nothing found is ever dropped (`pipeline.js`):
+- **App store layout:** a sidebar of views and categories (chips on phones) and rows of apps. Each row has an icon, the name, what it clones, likes, stars and installers, and the rating where the price would be.
+  - Views: Everything, Discover, and one per rating.
+  - Discover shows Most loved, two featured picks, Rising on GitHub, Just promoted, New this week and Proven, then every rated clone.
+- **Ratings:** ❤️ Loved, ⭐ Proven on GitHub, 🔥 Hyped (unproven), 😐 Mixed, 🆕 New & untested, 🌫️ Didn't catch on and ☠️ Don't touch. The chosen view explains itself in one line. The rules are under [Ratings](#ratings).
+- **Detail sheet**, laid out like an app store page:
+  - the screenshot, icon and name;
+  - **Get** or **Open**;
+  - the rating, and what people said;
+  - *Compared with the original*: what it does (✓), what's missing (✗), whether it opens the original's files, and a verdict;
+  - *Can I use it?*: installers, license, and whether it's maintained or 🪦 abandoned.
+  - The posts, numbers and score parts fold under **Details**.
+- **Get / Open:**
+  - **Get** downloads the installer for the visitor's system from the project's newest GitHub release (`.dmg`, `.exe`/`.msi`, `.AppImage`, `.apk`; universal or Apple-chip builds on Mac, x64 on Windows and Linux). It's offered only for ❤️ and ⭐ apps whose repo is at least 2 weeks old with 50+ stars, with a note that Flattery doesn't check downloads.
+  - **Open** links a project's web app, for anything but ☠️.
+- **Icons:** the README's logo or the organisation's avatar, or the maker's X picture when the poster built it, with initials as the fallback. They're copied to the `data` branch, never hot-linked; SVG is skipped.
+- **Sharing**, from the visitor's own X account: ❤️ *Share as my favourite*, *Share on X* and *Copy link* on every app, and *Share this issue on X* in the newsletter. Each project has its own page, `p/<code>/`, with its own preview image (`data/og/<code>.png`), so a shared link shows that project.
+- **Newsletter:** *This week in clones*, written weekly by Haiku from the week's rating changes. It opens in a drawer (📰) that never covers the cards, with past issues below, and is also in the RSS feed.
+- **How it works** (ℹ️) explains the ratings in a drawer. On phones, Stats, How it works, Free alternatives and Suggest move into a ⋯ menu.
+- **Free alternatives:**
+  - `alternatives/<app>/` exists for every app with 2+ clones, or a well-known product with one.
+  - Each page has an intro written from the data (best received, ready to install, runs in the browser) and an `alternatives/` index.
+- **Stats:** `stats/` shows the most-cloned companies and apps, clones per week, ratings by category, the fastest-growing repos, and builders with their hit rate.
+- **For search engines:**
+  - project pages carry schema.org `SoftwareApplication` data (free, systems, repo; no star rating is claimed);
+  - alternatives pages carry an `ItemList`;
+  - there's a sitemap and robots.txt.
+- **Usage:** GoatCounter page views on every page, plus events for Get, Open, GitHub, shares, filters, categories, search, Surprise me, the newsletter, votes and objections.
 
-1. **Refresh** — fresh likes, reposts, replies, quotes, bookmarks and views for known posts (100 per request): every run (every 8 hours) in a post's first week, daily up to 30 days, then weekly for good, so a rating can still change. Snapshots are kept at 1 hour, 24 hours and 7 days. Deleted posts stay in the catalog marked *removed*, with their text dropped.
-2. **Discover** — X recent search (`x.js`). Generic queries every run (`url:github.com` plus clone / reimplementation / reverse engineered / rebuilt…), plus product queries built from `products.js` (Photoshop, Figma, Notion…), 27 per run in turn, so all ~80 products are searched once a day. Each query continues from the newest post it saw last time.
-3. **Triage** — Claude Haiku (`haiku.js`) keeps only posts that announce a *clone*, *reverse-engineered*, *reimagined* or *port* of existing software, and names the original. News, opinions and "is there an alternative to…" posts are dropped.
-4. **Reactions** — for posts with some reach (20+ likes or 5+ reposts), up to 50 replies and 20 quote posts are read by Haiku, which labels each one positive, neutral or negative and lists red flags people raise (doesn't work, license/IP concern, scam or malware, just a wrapper, stolen code, overhyped, security issue). The author's own replies don't count, but repo links in them are picked up. Reactions are read again when replies have grown, while X's 7-day search still reaches them.
-5. **Confirm on GitHub** (`github.js`) — stars, forks, release downloads and daily star growth of the linked repo, 50 repos per GraphQL request. Renamed repos are followed; removed ones are marked.
-6. **Score** (`reception.js`) — see below. Each change of rating is kept in the post's history; the page marks clones promoted or demoted in the last two weeks and shows a *Just promoted* shelf.
+## Anyone can take part, through X
 
-The catalog is saved to the `data` branch (`latest.json`, one commit per run) and every run starts from it. A run never starts from empty while a catalog is saved, and refuses to write one smaller than the last.
+| Button | What it posts | What happens |
+|---|---|---|
+| ＋ **Suggest a clone** | `#FlatteryAdd <link>` | The scan looks up the linked X post, or searches X for posts linking the GitHub repo, and judges them like any other. |
+| ✅ **It works** / ❌ **It's broken** | `#FlatteryWorks` / `#FlatteryBroken <code>` | One vote per established account (30+ days old, 10+ followers). 3+ works adds to the score; 3+ broken takes some off. |
+| ⚑ **Object on X** | `#FlatteryRemove <code>` with a reason | The listing comes down once **6** objections count. Each must come from a different established account and give a real reason (judged by Haiku). At most 2 count per 30 minutes, and the first and last must be at least 2 hours apart. |
 
-**Search for a name:** **Run workflow** with `search` (e.g. `ArtCraft`, or several separated by commas) looks for every original post about it from the last 21 days (or `search_days`), popular first, and rates the ones Haiku confirms as clones.
+## How a scan works
 
-**One card per project:** posts about the same project are merged into one entry: they link the same repo, or name the same specific project (a name also joins the repo of the same name, e.g. "PhotoCraft" and `storytold/photocraft`). Generic names like "Discord clone" never merge. A merged card adds up likes, reposts and replies across its posts, uses the poster's own repo if any post links one, and lists every post in its detail sheet.
+`tools/scan.mjs` runs `pipeline.js`, which builds on the previous catalog every 8 hours, so nothing found is ever lost:
 
-**Corrections (`overrides.json`):** applied on every scan. `attach` puts a post into a project (by name or `owner/repo`), `repo` gives a post the repo it didn't link, `separate` keeps posts from merging, `hide` leaves posts off the page, and `owned` says whether a repo is the poster's own (`true`) or someone else's (`false`). For example, @echelon's ArtCraft launch post never names ArtCraft, so it's attached by hand.
+1. **Refresh:** new metrics for known posts. That happens every scan in a post's first week, daily up to 30 days, then weekly. Deleted posts stay marked *removed*, with their text dropped.
+2. **Discover:**
+   - X recent search: generic clone queries every run, and product queries from `products.js` in turn. Each query continues from the newest post it saw last time.
+   - Builders whose projects reached ❤️ or ⭐ (the watchlist).
+   - Posts that link known repos.
+   - `#FlatteryAdd` suggestions.
+   - Hacker News, through Algolia. Reddit too, when it doesn't block cloud servers.
+3. **Triage:** Claude Haiku (`haiku.js`) keeps only real announcements of a clone, reverse-engineered, reimagined or ported app. It names the original and gives a category. A project gets its own name, or none ("<app> clone"), never a description.
+4. **Reactions:** for posts with reach (20+ likes or 5+ reposts) or 3+ replies, Haiku reads up to 50 replies and 20 quote posts. It records their tone and any red flags: doesn't work, license, scam or malware, wrapper, stolen code, overhyped, security. A flag counts only when two different accounts raise it, with their replies quoted.
+5. **Confirm on GitHub** (`github.js`): stars, forks, release downloads and the files per system, star growth, license, commits in the last 30 days, the homepage, and the README's screenshot and logo.
+6. **Score** (`reception.js`), then **merge** posts about the same project into one card (`groups.js`): same repo, or the same specific name. Version numbers don't split a project ("Open Duet 2.0" and "Open-Duet" are one card).
+7. **Second opinion:** Claude Sonnet reviews each ❤️ and ☠️ once, applying the site's rules. When it disagrees, the card shows 😐 Mixed with its note.
+8. **Compared with the original:** Haiku compares up to 6 rated projects a scan with the app they clone, from the README and what people said, and redoes each monthly.
+9. **Newsletter:** weekly.
+10. **Publish:** the catalog goes to the `data` branch (`latest.json`, thumbnails, icons, preview images). Then project, alternatives and stats pages, the sitemap and the RSS feed are written, and the site deploys to GitHub Pages.
 
-**Finding the real announcement:** each run also searches X for posts linking up to 5 known starred repos (weekly per repo, 30 days back), so a project's own launch post and discussion turn up, not only the curator post that brought it in.
+**Kept off the page until they grow** (the posts stay in the catalog):
+- brand-new posts with under 3 likes and no repo;
+- untested ones still tiny after two weeks;
+- cards with neither a name of their own nor an original.
 
-**Trust:** reply tone from fewer than 15 replies is marked *low confidence*, weighs less, and can't decide a rating on its own. A red flag counts only when two different accounts raise it, and the detail sheet quotes up to three of their replies with links. The page also lists popular posts the filter recently left out, so wrong rejections can be spotted.
+**Corrections** (`overrides.json`, applied every scan): `attach` puts a post into a project, `repo` gives a post a repo it didn't link, `separate` stops a merge, `hide` drops a post, and `owned` says whose a repo is.
 
-**Page:** opens on rated projects (New & untested one tap away), each project has its own link (`#p=…`, with a Copy link button), a *Rising on GitHub* shelf shows the fastest-growing repos, and `data/feed.xml` is an RSS feed of newly rated and promoted projects. README screenshots are copied into `data/thumbs/` (kept on the `data` branch) instead of being loaded from other servers.
+## Ratings
 
-**Objections:** every card has **⚑ Object on X**, which opens a prefilled post with `#FlatteryRemove <code>` and a link to flattery.sala.company. Each scan reads those posts (`complaints.js`). A listing is taken down automatically once **6** objections count: one per account, accounts 30+ days old with 10+ followers, a real reason (Claude Haiku judges it; the bare template or a copied reason doesn't count), at most 2 counted per 30 minutes, and the first and last at least 2 hours apart. Cards show how many count so far; taken-down listings are listed at the bottom of the page and stay down.
-
-**Watchlist:** builders whose projects reached ❤️ or ⭐ with their own repo are checked every run, so their next launch is caught on day one. Posts that name no project (like @echelon's ArtCraft launch post) are matched to a known project by Haiku. New entries also get a category (Design, Office, Dev tools, AI, Media…) and a clean product name; the page has a category bar and shows "saves ~$X/yr" for well-known paid originals.
-
-**Newsletter:** once a week Haiku writes *This week in clones* from the week's rating changes and rising repos. The latest issue is at the top of the page with the archive below it, and issues are in the RSS feed. Cards and issues have **Share on X** buttons that link back to flattery.sala.company.
-
-**Project pages and share images:** each deploy writes a page per project at `p/<code>/` (the full app with that project open, its own title, description and preview image), plus `sitemap.xml` and `robots.txt` (`tools/pages.mjs`). Share and Copy link buttons use these pages, so a link shared on X shows that project. The preview images (`data/og/<code>.png`, 1200×630, with the name, rating, score, likes, stars and README screenshot) are drawn by a headless browser in `tools/cards.mjs`, kept on the `data` branch and redrawn only when what they show changes.
-
-**Can I use it?** Each card says whether the poster's own repo has installers (Mac, Windows, Linux, Android, iOS, read from release file names), runs online (its homepage), or is source only; warns when there's no license; and marks it 🪦 abandoned after 30 days without changes (or archived). A filter narrows the list to ready-to-install, online, licensed or maintained projects.
-
-**Free alternatives to X:** `alternatives/<app>/` for every app with 2+ clones (or a well-known product), and an `alternatives/` index: the app filtered to that app's clones, with its own title for search engines.
-
-**Stats:** `stats/` (`tools/stats.mjs`): most-cloned companies and apps, clones per week, ratings by category, fastest-growing repos, the share abandoned, and builders with their projects, stars and hit rate.
-
-**I tried it:** ✅ It works / ❌ It's broken on each card open an X post with `#FlatteryWorks` or `#FlatteryBroken` and the card's code. One vote per established account (30+ days, 10+ followers); 3+ works (and twice the broken) adds a little to the score, 3+ broken (more than works) takes some off.
-
-**Second opinion:** every ❤️ Loved and ☠️ Don't touch verdict is reviewed once by Claude Sonnet from the numbers and the quoted replies; when it disagrees, the card shows 😐 Mixed with its note.
-
-**Hacker News and Reddit:** besides X, each run searches Hacker News (Algolia's free API) and Reddit (public JSON, which often refuses cloud servers; then it's skipped) for clone announcements. They go through the same triage, their comments are read for tone, and they merge with X posts about the same project.
-
-**Newsletter:** the latest issue opens in a drawer (📰 in the top bar, or the line under the headline), so it never pushes the cards down.
-
-**Status and budget:** the page's *Status* section shows the last scan, scans in the last 7 days, and X reads this month. Once a month's reads pass `X_MONTHLY_READS` (repo variable, default 60,000), scans stop reading X until the month turns; GitHub checks and scoring carry on. Set `X_COST_PER_READ` (e.g. `0.005`) to log each run's estimated X cost in `latest.json` (`info.run.x_cost_usd`).
-
-**Backfill:** **Actions → Scan and deploy → Run workflow** with `backfill_days` (e.g. 21) and a higher `max_reads` (e.g. 3000) searches X's full archive for popular clones from those days. Reactions on threads older than 7 days are also re-read weekly through the archive when they've grown.
-
-There is no GitHub discovery: X finds the projects, GitHub only confirms them.
-
-## Reception score and verdicts
-
-The score (0–100) is a weighted mean of:
+The score (0–100) is a weighted mean:
 
 | Part | Weight | What |
 |---|---|---|
 | approval | 25 | likes + 2×reposts + 1.5×bookmarks, log-scaled (≈5,000 = full marks) |
 | interest | 5 | engagement per view (3% = full marks), or per follower when views are missing |
-| sentiment | 25 | positive vs negative share of replies and quotes (needs 5+) |
+| sentiment | 25 | positive vs negative share of replies and quotes (needs 5+; fewer than 15 is *low confidence* and weighs less) |
 | github | 45 | stars, release downloads and star growth |
 
-Penalties: being *ratioed* (more replies and quotes than likes), each red flag, and a serious red flag (scam/malware, stolen code, security issue).
+Penalties apply for being *ratioed* (more replies and quotes than likes), for each red flag, and for a serious one (scam or malware, stolen code, security issue).
 
-| Verdict | When |
+| Rating | When |
 |---|---|
-| **❤️ Loved** | real use on GitHub (100+ stars or 500+ downloads on the poster's own repo, 1,000+ / 10,000+ counts regardless of score) and a real crowd on X (20+ likes or 5+ reposts), replies not clearly negative |
+| **❤️ Loved** | real use on GitHub (100+ stars or 500+ downloads; 1,000+ / 10,000+ counts regardless of score) and a real crowd on X (20+ likes or 5+ reposts), with replies not clearly negative |
 | **⭐ Proven on GitHub** | the same GitHub use, but quiet on X so far |
-| **🔥 Hyped, unproven** | score 60+ and mostly positive replies on X, but no repo or one nobody uses yet |
-| **😐 Mixed** | in between, or a well-used repo with clearly negative replies |
-| **☠️ Don't touch** | a serious red flag raised by at least two different accounts (scam/malware, stolen code, security issue), a removed repo, or a low score / mostly negative replies without GitHub to back it |
-| **🆕 New & untested** | too little reach, or under 24 hours old with no replies read yet, and no real GitHub use |
+| **🔥 Hyped, unproven** | score 60+ and mostly positive replies, but no repo or one nobody uses yet |
+| **😐 Mixed** | in between, or a well-used repo with clearly negative replies. A serious flag against a project most people clearly like is shown as **⚠️ Disputed** here. |
+| **☠️ Don't touch** | a serious red flag raised by two different accounts, a removed repo, or a low score with mostly negative replies and no GitHub to back it |
+| **🆕 New & untested** | too little reach, or under a day old with no replies read yet, and no real GitHub use |
 | **🌫️ Didn't catch on** | more than 14 days old with little reach and no real GitHub use (it comes back if people pick it up) |
 
-A serious red flag against a project most people clearly like (15+ replies, mostly positive) with real GitHub use is shown as **⚠️ Disputed** under 😐 Mixed rather than ☠️. Version numbers don't split a project ("Open Duet 2.0" and "Open-Duet" are one card), accounts that keep posting other people's projects (3+) count at half weight, and projects whose post gives no name get a short one from Haiku.
+**Whose stars count:** GitHub counts when the repo is the project's own. That means:
+- its owner matches the poster;
+- or it was created at most 120 days before the post;
+- or its name is the project's name, even when someone else shared it (Voicebox and `jamiepine/voicebox`).
 
-A famous repo (10,000+ stars) that isn't the poster's own never becomes a card's subject: the post keeps its own project name without the repo, or is left off the page. Each account counts once per project.
+Stars of a famous repo that isn't the project (Linux behind a post about "Ginux") never count, and such a repo isn't shown as the card's repo.
 
-GitHub only counts when the repo is the poster's own: its owner matches their X handle or name (or a 5+ letter word of it, so `Anil-matcha` matches `@matchaman11`), or it was created at most 120 days before the post, so it's the clone itself even when a curator shares it. Linking someone else's famous project borrows nothing.
+**Steady ratings:** a new rating shows once it holds for two scans in a row, so cards don't flip back and forth. ☠️ Don't touch and jumps of 20+ points show at once. While a change waits, the sheet says so.
 
-The thresholds live at the top of `reception.js`. This is crowd opinion, not a legal or technical judgement.
+**Fairness:** each account counts once per project. Accounts that keep posting other people's projects (3+) count at half weight.
+
+The thresholds live at the top of `reception.js`. Everything here is crowd opinion, not a legal or technical judgement.
+
+## Keeping itself running
+
+- **Timers (as for heat.sala.company):** GitHub's own schedules run late and sometimes not at all, so cron-job.org starts the workflows through GitHub's API. It uses a fine-grained token limited to this repo (*Actions: read and write*), and each job sends `POST https://api.github.com/repos/jamalxcode/flattery/actions/workflows/<file>/dispatches` with the body `{"ref":"main"}`.
+  - `pages.yml` (scan and deploy) at 00:17, 08:17 and 16:17 UTC.
+  - `freshness.yml` every hour at :41.
+  - GitHub's schedules stay on as a backup. The token expires; renew it in the cron-job.org jobs before it does.
+- **Freshness check** (`freshness.yml`, `tools/check-fresh.mjs`): it fails, and GitHub emails the owner, when the live catalog is over 11 hours old, the page shows no projects, the monthly X read cap is reached, or the site is down. It also cancels deploys GitHub left stuck.
+- **Never paused:** GitHub pauses scheduled workflows after 60 days without commits, so each scan re-enables its own workflow.
+- **Never shrinks:** a scan refuses to save a catalog smaller than the last. If X, Haiku or GitHub fails, the last good data stays.
+- **Self-check:** every scan logs any card whose posts link a GitHub repo it doesn't show, and the page's Status section shows ✅ or ⚠️.
+- **Status:** the bottom of the page shows the last scan, scans in the last 7 days, X reads this month and the self-check.
+- **Before merging:** `pr-check.yml` runs on every pull request. It runs the offline tests, then `tools/ui-check.mjs`, which opens the page in a real browser with the real catalog on a desktop and a phone. It checks rows, Discover, search, the sidebar, the detail sheet, How it works, script errors and sideways scrolling.
 
 ## Setup
 
 Repository secrets (**Settings → Secrets and variables → Actions**):
 
-- `X_BEARER_TOKEN` — the bearer token of an app in the [X developer console](https://developer.x.com/). Needs recent search, post lookup and quote posts (API v2).
-- `ANTHROPIC_API_KEY` — for Claude Haiku.
+| Secret | Needed | For |
+|---|---|---|
+| `X_BEARER_TOKEN` | yes | X API v2: recent and full-archive search, post lookup, quote posts |
+| `ANTHROPIC_API_KEY` | yes | Claude Haiku (triage, replies, names, comparisons, newsletter) and Sonnet (second opinion) |
+| `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_SECRET` | no | Only if the site should post on X by itself: the weekly newsletter and newly loved projects, once each, with a link back. These are the app's keys with *Read and write* permission and the account's access token. Without them nothing is posted. |
 
-The Actions token (`github.token`) covers the GitHub checks. Without the secrets the scan fails and the previous catalog is republished.
-
-**Cost:** X bills per post read, so each run is capped with `--max-reads` (1,000 in the workflow, at most ~3,000 a day at 3 runs). Lower it, or the run frequency in `.github/workflows/pages.yml`, to fit your plan. The run log ends with the reads, Haiku calls and tokens used. Haiku costs a few cents a day.
+The Actions token covers GitHub. Repository variables: `X_MONTHLY_READS` (default 60,000; scans stop reading X past it until the month turns) and `X_COST_PER_READ` (optional; logs each run's estimated X cost).
 
 **Domain:** flattery.sala.company (`CNAME`; DNS: CNAME `flattery` → `jamalxcode.github.io`).
 
-**Timers (as for heat.sala.company):** GitHub's own schedules run late and sometimes not at all, so cron-job.org starts the workflows through GitHub's API, with a fine-grained token limited to this repo (*Actions: read and write*):
+**By hand:** **Actions → Scan and deploy → Run workflow** takes these inputs:
+- `max_reads` (default 1,000);
+- `backfill_days`: also search X's full archive that far back for popular clones;
+- `search`: names to look for, comma-separated, with `search_days`.
 
-- **Scan and deploy**, every 8 hours: `POST https://api.github.com/repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches`, body `{"ref":"main"}`.
-- **Freshness check**, every hour: the same with `freshness.yml`. It fails, and GitHub emails you, when the live catalog is more than 11 hours old or the site is down. It also cancels a deploy GitHub left stuck, so the scans behind it can run.
-
-GitHub's schedules stay on as a backup. Each scan also re-enables its own schedule, so GitHub never pauses it for inactivity. The token expires; renew it in both cron-job.org jobs before it does. To run a scan by hand: **Actions → Scan and deploy → Run workflow**.
+**Check balances monthly:** your X API credit and your Anthropic balance. If either runs out, scans keep the last data but stop finding and rating.
 
 ## Running locally
 
-Node 20 or newer:
+Node 22:
 
 ```sh
 npm ci
+npm test                      # the whole pipeline offline, against fake X, Haiku and GitHub answers
 X_BEARER_TOKEN=... ANTHROPIC_API_KEY=... GITHUB_TOKEN=... node tools/scan.mjs --cache data/latest.json --out data
+node tools/pages.mjs --data data/latest.json --out .    # project, alternatives pages, sitemap
+node tools/stats.mjs --data data/latest.json --out .    # stats page
+node tools/ui-check.mjs --root .                        # the page in a browser (needs data/latest.json)
 ```
 
-Options: `--max-reads`, `--per-query`, `--products-per-run`, `--max-reactions`, `--budget-sec`, `--rotate`.
+Scan options: `--max-reads`, `--per-query`, `--products-per-run`, `--max-reactions`, `--budget-sec`, `--rotate`, `--backfill-days`, `--search`.
 
-`node tools/test.mjs` runs the whole pipeline offline against fake X, Haiku and GitHub answers and checks the verdicts.
+To search for a product, add a line to `products.js`.
 
-Add a product to search for by adding a line to `products.js`.
+## License
+
+[MIT](LICENSE) © 2026 Sala Company. Projects listed on the site belong to their makers. Ratings are crowd opinion, collected and summarised automatically.
