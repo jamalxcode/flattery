@@ -38,7 +38,14 @@ for (const [width, label] of [[1280, "desktop"], [390, "phone"]]) {
   const rows = await p.locator(".grid .card").count();
   check(rows > 0, `${label}: ${rows} rows in the list`);
   check(await p.locator("[data-r=discover] .shelf-sec").count() > 0, `${label}: Discover shelves shown`);
-  check(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${label}: no sideways scrolling`);
+  // Sideways scrolling, naming the elements that stick out
+  const wide = await p.evaluate(() => {
+    const w = document.documentElement.clientWidth;
+    if (document.documentElement.scrollWidth <= w + 1) return [];
+    return [...document.querySelectorAll("body *")].filter(el => el.getBoundingClientRect().right > w + 1 && getComputedStyle(el).position !== "fixed" && !el.closest("dialog:not([open]), [hidden], .side-group"))
+      .slice(0, 5).map(el => `${el.tagName.toLowerCase()}.${[...el.classList].join(".")} (${Math.round(el.getBoundingClientRect().right)}px of ${w}px): ${(el.textContent || "").trim().slice(0, 40)}`);
+  });
+  check(!wide.length, `${label}: no sideways scrolling${wide.length ? ": " + wide.join(" | ") : ""}`);
 
   // Search: a word from the first row's name finds it
   const first = (await p.locator(".grid .card h3").first().textContent()).trim();
