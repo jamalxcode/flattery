@@ -27,7 +27,7 @@ async function graphql(token, query, log) {
 const fields = since => `nameWithOwner url homepageUrl owner { __typename avatarUrl(size: 160) } description isArchived isFork pushedAt createdAt stargazerCount forkCount
   watchers { totalCount } licenseInfo { spdxId } primaryLanguage { name }
   defaultBranchRef { target { ... on Commit { history(since: "${since}") { totalCount } } } }
-  releases(first: 10, orderBy: { field: CREATED_AT, direction: DESC }) { totalCount nodes { releaseAssets(first: 30) { nodes { name downloadCount browserDownloadUrl } } } }`;
+  releases(first: 10, orderBy: { field: CREATED_AT, direction: DESC }) { totalCount nodes { releaseAssets(first: 30) { nodes { name downloadCount downloadUrl } } } }`;
 
 // Which systems a release can be installed on, from its file names
 export function platformsOf(names) {
@@ -52,13 +52,13 @@ export function downloadsOf(releases) {
     Android: [/\.apk$/i],
   };
   for (const rel of releases || []) {
-    const assets = (rel?.releaseAssets?.nodes || []).filter(a => a?.browserDownloadUrl && !/\.(sha\d*|sig|asc|blockmap|ya?ml|txt|json)$|source|symbols|debug/i.test(a.name || ""));
+    const assets = (rel?.releaseAssets?.nodes || []).filter(a => a?.downloadUrl && !/\.(sha\d*|sig|asc|blockmap|ya?ml|txt|json)$|source|symbols|debug/i.test(a.name || ""));
     for (const [os, tests] of Object.entries(RANK)) {
       if (out[os]) continue;
       for (const re of tests) {
         // Mac builds for Apple chips over Intel ones when both exist
         const hits = assets.filter(a => re.test(a.name)).sort((x, y) => /arm64|aarch64|universal/i.test(y.name) - /arm64|aarch64|universal/i.test(x.name));
-        if (hits.length) { out[os] = hits[0].browserDownloadUrl; break; }
+        if (hits.length) { out[os] = hits[0].downloadUrl; break; }
       }
     }
   }
@@ -77,7 +77,8 @@ export async function repoStats(token, names, log) {
       return `r${j}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { ${fields(since)} }`;
     });
     const res = await graphql(token, `query { ${parts.join("\n")} }`, log);
-    if (!res?.data) continue;
+    // A mistake in the query itself fails every repo: say so in the log, never silently
+    if (!res?.data) { log(`GitHub query failed: ${(res?.errors || []).map(e => e.message).join("; ").slice(0, 300) || "no data"}`, "warn"); continue; }
     const errs = new Map((res.errors || []).map(e => [e.path?.[0], e.type || e.message]));
     batch.forEach((n, j) => {
       const r = res.data[`r${j}`];

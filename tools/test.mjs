@@ -125,9 +125,9 @@ assert.equal(pickReadmeImage("no images here", "a/b"), null);
 assert.equal(pickReadmeLogo('<p align="center"><img src="assets/logo.png" width="120"></p> ![shot](docs/shot.png)', "a/b"), "https://raw.githubusercontent.com/a/b/HEAD/assets/logo.png");
 assert.equal(pickReadmeLogo('![b](https://img.shields.io/x) ![shot](docs/shot.png)', "a/b"), null);
 assert.deepEqual(downloadsOf([{ releaseAssets: { nodes: [
-  { name: "App-1.0-x64.dmg", browserDownloadUrl: "u/x64.dmg" }, { name: "App-1.0-arm64.dmg", browserDownloadUrl: "u/arm.dmg" },
-  { name: "App-Setup.exe", browserDownloadUrl: "u/setup.exe" }, { name: "App.exe.sha256", browserDownloadUrl: "u/sum" },
-  { name: "app.AppImage", browserDownloadUrl: "u/app.AppImage" }] } }]), { Mac: "u/arm.dmg", Windows: "u/setup.exe", Linux: "u/app.AppImage" });
+  { name: "App-1.0-x64.dmg", downloadUrl: "u/x64.dmg" }, { name: "App-1.0-arm64.dmg", downloadUrl: "u/arm.dmg" },
+  { name: "App-Setup.exe", downloadUrl: "u/setup.exe" }, { name: "App.exe.sha256", downloadUrl: "u/sum" },
+  { name: "app.AppImage", downloadUrl: "u/app.AppImage" }] } }]), { Mac: "u/arm.dmg", Windows: "u/setup.exe", Linux: "u/app.AppImage" });
 assert.deepEqual(parseAdd({ id: "9", urls: ["https://x.com/bob/status/123", "https://github.com/a/b"], repos: ["a/b"] }), { ids: ["123"], repos: ["a/b"] });
 // X's documented OAuth 1.0a example
 assert.match(oauthHeader("POST", "https://api.twitter.com/1.1/statuses/update.json?include_entities=true&status=" + encodeURIComponent("Hello Ladies + Gentlemen, a signed OAuth request!").replace(/!/g, "%21"),
