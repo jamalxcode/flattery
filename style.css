@@ -160,6 +160,12 @@ select { height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid 
 .sheet h4 { font-size: 0.78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
 .senti .mini { height: 10px; border-radius: 5px; margin-bottom: 6px; }
 .senti p { font-size: 0.9rem; color: var(--text-muted); }
+.posts { list-style: none; display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow: auto; }
+.posts li { background: var(--surface-2); border-radius: 12px; padding: 8px 12px; font-size: 0.85rem; }
+.posts li.gone { opacity: .55; }
+.posts a { font-weight: 700; text-decoration: none; }
+.posts span { color: var(--text-muted); }
+.posts small { display: block; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--text-muted); }
 .chip.flag { background: var(--neg); color: #fff; }

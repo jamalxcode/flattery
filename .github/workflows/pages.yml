@@ -30,6 +30,9 @@ on:
       search:
         description: "Also search X for these names, comma-separated (e.g. ArtCraft)"
         default: ""
+      search_days:
+        description: "How many days back the name search goes"
+        default: "21"
       max_reads:
         description: "Most X posts to read in this run (X bills per post)"
         default: "1000"
@@ -74,11 +77,12 @@ jobs:
           ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}"
           GITHUB_TOKEN: "${{ github.token }}"
           SEARCH: "${{ inputs.search }}"
+          SEARCH_DAYS: "${{ inputs.search_days || '21' }}"
         run: |
           mkdir -p data
           BACKFILL="${{ inputs.backfill_days || '0' }}"
           if [ "$BACKFILL" != "0" ]; then EXTRA="--backfill-days $BACKFILL --max-reactions 40 --budget-sec 900"; else EXTRA="--budget-sec 360"; fi
-          if node tools/scan.mjs --max-reads "${{ inputs.max_reads || '1000' }}" --rotate $EXTRA ${SEARCH:+--search "$SEARCH"} --cache "$RUNNER_TEMP/prev.json" --out data; then
+          if node tools/scan.mjs --max-reads "${{ inputs.max_reads || '1000' }}" --rotate $EXTRA ${SEARCH:+--search "$SEARCH" --search-days "$SEARCH_DAYS"} --cache "$RUNNER_TEMP/prev.json" --out data; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::scan failed, republishing the previous catalog"

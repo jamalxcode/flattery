@@ -136,7 +136,7 @@ function normalise(p, users) {
   return {
     id: p.id,
     conversation_id: p.conversation_id,
-    text: p.text || "",
+    text: (p.text || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"), // X sends these escaped
     created_at: p.created_at,
     lang: p.lang,
     author: { id: p.author_id, username: u.username || "", name: u.name || "", followers: u.public_metrics?.followers_count || 0, verified: !!u.verified },

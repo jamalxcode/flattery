@@ -50,7 +50,7 @@ if (a.cache) {
 
 const x = new X(xToken, log, { maxReads: +a["max-reads"], maxWait: +a["max-wait"] });
 const haiku = new Haiku(log);
-const { results, info: runInfo } = await run(prev, {
+const { results, groups, info: runInfo } = await run(prev, {
   rotate: a.rotate ? Math.floor(Date.now() / 288e5) : 0,
   deadline: +a["budget-sec"] ? t0 + +a["budget-sec"] * 1000 : 0,
   perQuery: +a["per-query"],
@@ -81,14 +81,14 @@ const info = {
 };
 delete info.counts;
 await mkdir(a.out, { recursive: true });
-await writeFile(`${a.out}/latest.json`, JSON.stringify({ info, results }));
+await writeFile(`${a.out}/latest.json`, JSON.stringify({ info, results, groups }));
 const [css, renderJs, index] = await Promise.all(["style.css", "render.js", "index.html"].map(f => readFile(new URL(f, root), "utf8")));
 const noteHtml = index.match(/<section class="about">([\s\S]*?)<\/section>/)?.[1] || "";
-await writeFile(`${a.out}/latest.html`, reportHtml({ css, renderJs, noteHtml, results, info }));
+await writeFile(`${a.out}/latest.html`, reportHtml({ css, renderJs, noteHtml, results: groups, info }));
 
-const by = v => results.filter(e => e.reception.verdict === v).length;
-log(`wrote ${a.out}/latest.json and latest.html: ${results.length} posts (${by("well-received")} well received, ` +
+const by = v => groups.filter(e => e.reception.verdict === v).length;
+log(`wrote ${a.out}/latest.json and latest.html: ${results.length} posts, ${groups.length} projects (${by("well-received")} well received, ` +
   `${by("unconfirmed")} unconfirmed, ${by("mixed")} mixed, ${by("stay-away")} stay away, ${by("too-early")} too early), ` +
   `${x.reads} X reads, ${haiku.calls} Haiku calls. Top 10:`);
-for (const e of results.filter(e => e.status === "ok").slice(0, 10))
+for (const e of groups.filter(e => e.status === "ok").slice(0, 10))
   console.log(`  ${String(e.reception.score).padStart(3)}  ${e.reception.verdict.padEnd(13)} @${e.author.username}  ${e.project || e.repo || e.id}${e.original ? " ≈ " + e.original : ""}`);

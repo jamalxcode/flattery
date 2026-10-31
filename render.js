@@ -2,7 +2,7 @@
 // loved, filters, a grid of cards, and a detail sheet per clone. Shared by the live page
 // and the standalone report. opts.search: an <input> outside root to filter with.
 const RATINGS = [
-  ["well-received", "❤️", "Loved", "Popular on X, mostly positive replies, and real use on GitHub.", "loved"],
+  ["well-received", "❤️", "Loved", "Real use on GitHub (the poster's own repo, lots of stars or downloads) and people aren't against it.", "loved"],
   ["unconfirmed", "🔥", "Hyped, unproven", "Lots of buzz on X, but no repo or one nobody uses yet.", "hype"],
   ["too-early", "🆕", "New & untested", "Too new or too small to judge yet.", "new"],
   ["mixed", "😐", "Mixed", "People are split on it.", "mixed"],
@@ -162,7 +162,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
         ${e.summary ? `<p class="sum">${esc(e.summary)}</p>` : ""}
         <div class="stats"><span class="score">${e.reception.score}</span><span>♥ ${num(e.metrics.likes)}</span>
           ${e.github && e.github.status !== "gone" && e.reception.repo_counted !== false ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
-          <span>@${esc(e.author.username)}</span></div>
+          <span>${e.group ? `${e.posts.length} posts` : `@${esc(e.author.username)}`}</span></div>
         ${mini(e.sentiment)}
       </div></article></li>`;
   }).join("") : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
@@ -193,8 +193,11 @@ function renderReport(root, DATA, INFO, opts = {}) {
             <a${e.repo && cls !== "danger" ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener">Open the post on X</a>
             ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow">☠️ Repo (don't run it)</a>` : ""}
           </div>
-          ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>@${esc(e.author.username)} · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
-          <div><h4>On X</h4><div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div></div>
+          ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>@${esc(e.author.username)} · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
+          ${e.group ? `<div><h4>${e.posts.length} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
+            <a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc((p.created_at || "").slice(0, 10))}</span>
+            <small>${esc(p.text) || "removed"}</small></li>`).join("")}</ul></div>` : ""}
+          <div><h4>On X${e.group ? " · all posts" : ""}</h4><div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div></div>
           ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes</h4>${mini(s)}
             <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
           ${s?.flags?.length ? `<div><h4>Red flags people raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div></div>` : ""}

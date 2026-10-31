@@ -21,7 +21,7 @@ themeBtn.addEventListener("click", () => {
 // Surprise me: a random loved clone, or any rated one when none are loved yet
 $("surprise").addEventListener("click", () => {
   if (!live) return;
-  const ok = live.results.filter(e => e.status !== "gone");
+  const ok = (live.groups || live.results).filter(e => e.status !== "gone");
   const pool = ok.filter(e => e.reception.verdict === "well-received");
   const list = pool.length ? pool : ok;
   if (list.length) $("live").flattery?.open(list[Math.floor(Math.random() * list.length)].id);
@@ -48,7 +48,7 @@ async function loadLive() {
     if (data.info?.source !== "x") throw new Error("old format");
     if (!live || data.info.generated_iso !== live.info.generated_iso) {
       live = data;
-      renderReport($("live"), live.results, live.info, { search: $("search") });
+      renderReport($("live"), live.groups || live.results, live.info, { search: $("search") });
     }
     liveStatus();
   } catch {
