@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flattery: software clones, rated by the crowd</title>
 <meta name="description" content="Clones, reverse-engineered and reimagined versions of existing software, found on X and rated by how people received them.">
+<link rel="canonical" href="https://flattery.sala.company/">
+<meta property="og:title" content="Flattery: software clones, rated by the crowd">
+<meta property="og:description" content="Clones, reverse-engineered and reimagined versions of apps you know, rated by reactions on X and use on GitHub. Updated every 8 hours.">
+<meta property="og:url" content="https://flattery.sala.company/">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪞</text></svg>">
 <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
@@ -29,15 +34,15 @@
 
   <section class="about">
     <h2>How the ratings work</h2>
-    <p>Every eight hours Flattery searches X for posts announcing a clone, a reverse-engineered or a reimagined version of existing software. Claude Haiku keeps only real announcements, then reads the replies and quote posts to judge the tone and spot red flags such as scams, stolen code or projects that don't work.</p>
-    <p><b>❤️ Loved</b> means people actually use it: GitHub counts most. A repo with 1,000+ stars or 10,000+ downloads is loved however small its X post was; one with 100+ stars or 500+ downloads needs a decent reception on X too. Stars only count when the repo is the poster's own, or new enough to be the clone itself; linking someone else's famous project borrows nothing.
-      <b>🔥 Hyped, unproven</b> is popular on X but has no repo, or one nobody uses yet. <b>🆕 New &amp; untested</b> is too new or too small to judge.
-      <b>☠️ Don't touch</b> means mostly negative replies, a pile-on, a removed repo, or a serious red flag raised by several people.</p>
-    <p>This is crowd opinion, not a legal or technical judgement. Always check a project yourself before you run it.</p>
+    <p>Every eight hours Flattery searches X for posts announcing a clone, a reverse-engineered or a reimagined version of existing software, follows builders whose projects did well, and looks up the posts that link each known repo. Claude Haiku keeps only real announcements, then reads the replies and quote posts for their tone and for red flags such as scams, stolen code or projects that don't work. GitHub stars and downloads count only for the poster's own repo.</p>
+    <p><b>❤️ Loved</b>: real use on GitHub and a real crowd on X, mostly positive. <b>⭐ Proven on GitHub</b>: lots of stars or downloads, but quiet on X so far.
+      <b>🔥 Hyped, unproven</b>: popular on X with no repo, or one nobody uses yet. <b>😐 Mixed</b>: people are split. <b>🆕 New &amp; untested</b>: too new or too small to judge.
+      <b>☠️ Don't touch</b>: mostly negative replies, a pile-on, a removed repo, or a serious red flag raised by at least two different accounts, quoted on the card.</p>
+    <p>Everything here is crowd opinion, collected and summarised automatically. It is not a legal or technical judgement, and nobody reviews it by hand. If a listing is wrong, use <b>⚑ Object on X</b> on its card: once six or more established accounts object for real reasons, spread over at least two hours, it is taken down automatically.</p>
   </section>
 
   <footer>
-    <span>Flattery · a <a href="https://go.sala.company">Sala Company</a> app</span>
+    <span><a href="https://flattery.sala.company">flattery.sala.company</a> · a <a href="https://go.sala.company">Sala Company</a> app</span>
     <span><a href="data/feed.xml">RSS</a> · <a href="data/latest.json">JSON</a> · <a href="data/latest.html">standalone report</a> · <a href="https://github.com/jamalxcode/flattery">Source</a></span>
   </footer>
 </main>

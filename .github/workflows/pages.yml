@@ -36,8 +36,8 @@ on:
       max_reads:
         description: "Most X posts to read in this run (X bills per post)"
         default: "1000"
-# contents: write saves the catalog to the data branch; issues: write opens an issue when scans fail
-permissions: { contents: write, pages: write, id-token: write, issues: write }
+# contents: write saves the catalog to the data branch
+permissions: { contents: write, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
   deploy:
@@ -81,8 +81,8 @@ jobs:
           GITHUB_TOKEN: "${{ github.token }}"
           SEARCH: "${{ inputs.search }}"
           SEARCH_DAYS: "${{ inputs.search_days || '21' }}"
-          SITE_URL: "${{ steps.pages.outputs.base_url }}/"
           X_COST_PER_READ: "${{ vars.X_COST_PER_READ }}"  # optional repo variable, e.g. 0.005
+          X_MONTHLY_READS: "${{ vars.X_MONTHLY_READS || '60000' }}"  # X reads per month before scans pause reading X
         run: |
           mkdir -p data
           BACKFILL="${{ inputs.backfill_days || '0' }}"
@@ -106,21 +106,6 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "Catalog $(date -u +%Y-%m-%dT%H:%MZ)" || { echo "catalog unchanged"; exit 0; }
           git push -q origin data
-      # Tell the owner when scans fail, through one open issue; close it once they work again
-      - name: Report scan health
-        if: always() && steps.scan.conclusion == 'success'
-        env: { GH_TOKEN: "${{ github.token }}" }
-        run: |
-          title="Flattery scans are failing"
-          num=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number -q '.[0].number' || true)
-          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          if [ "${{ steps.scan.outputs.ok }}" = "true" ]; then
-            [ -n "$num" ] && gh issue close "$num" -R "$GITHUB_REPOSITORY" --comment "Scans work again: $run" || true
-          elif [ -n "$num" ]; then
-            gh issue comment "$num" -R "$GITHUB_REPOSITORY" --body "Failed again: $run" || true
-          else
-            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "The scheduled scan failed and the previous catalog was republished. Log: $run" || true
-          fi
       - run: rm -rf node_modules
       - uses: actions/upload-pages-artifact@v4
         with: { path: . }

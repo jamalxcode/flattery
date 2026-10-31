@@ -4,7 +4,9 @@
 
 A catalog of clones, reverse-engineered and reimagined versions of existing software, found on X and ranked by how people received them.
 
-**See it:** https://jamalxcode.github.io/flattery/ (also [`data/latest.html`](https://jamalxcode.github.io/flattery/data/latest.html) and [`data/latest.json`](https://jamalxcode.github.io/flattery/data/latest.json))
+**See it:** https://flattery.sala.company/ (also [`data/latest.json`](https://flattery.sala.company/data/latest.json), [`data/feed.xml`](https://flattery.sala.company/data/feed.xml) and a standalone [`data/latest.html`](https://flattery.sala.company/data/latest.html))
+
+Everything runs by itself: nobody reviews listings, objections or the newsletter by hand.
 
 ## How it works
 
@@ -31,7 +33,13 @@ The catalog is saved to the `data` branch (`latest.json`, one commit per run) an
 
 **Page:** opens on rated projects (New & untested one tap away), each project has its own link (`#p=…`, with a Copy link button), a *Rising on GitHub* shelf shows the fastest-growing repos, and `data/feed.xml` is an RSS feed of newly rated and promoted projects. README screenshots are copied into `data/thumbs/` (kept on the `data` branch) instead of being loaded from other servers.
 
-**Health and cost:** when a scheduled scan fails, the workflow opens an issue (*Flattery scans are failing*) and closes it once scans work again. Set the repo variable `X_COST_PER_READ` (e.g. `0.005`) to log each run's estimated X cost in `latest.json` (`info.run.x_cost_usd`).
+**Objections:** every card has **⚑ Object on X**, which opens a prefilled post with `#FlatteryRemove <code>` and a link to flattery.sala.company. Each scan reads those posts (`complaints.js`). A listing is taken down automatically once **6** objections count: one per account, accounts 30+ days old with 10+ followers, a real reason (Claude Haiku judges it; the bare template or a copied reason doesn't count), at most 2 counted per 30 minutes, and the first and last at least 2 hours apart. Cards show how many count so far; taken-down listings are listed at the bottom of the page and stay down.
+
+**Watchlist:** builders whose projects reached ❤️ or ⭐ with their own repo are checked every run, so their next launch is caught on day one. Posts that name no project (like @echelon's ArtCraft launch post) are matched to a known project by Haiku. New entries also get a category (Design, Office, Dev tools, AI, Media…) and a clean product name; the page has a category bar and shows "saves ~$X/yr" for well-known paid originals.
+
+**Newsletter:** once a week Haiku writes *This week in clones* from the week's rating changes and rising repos. The latest issue is at the top of the page with the archive below it, and issues are in the RSS feed. Cards and issues have **Share on X** buttons that link back to flattery.sala.company.
+
+**Status and budget:** the page's *Status* section shows the last scan, scans in the last 7 days, and X reads this month. Once a month's reads pass `X_MONTHLY_READS` (repo variable, default 60,000), scans stop reading X until the month turns; GitHub checks and scoring carry on. Set `X_COST_PER_READ` (e.g. `0.005`) to log each run's estimated X cost in `latest.json` (`info.run.x_cost_usd`).
 
 **Backfill:** **Actions → Scan and deploy → Run workflow** with `backfill_days` (e.g. 21) and a higher `max_reads` (e.g. 3000) searches X's full archive for popular clones from those days. Reactions on threads older than 7 days are also re-read weekly through the archive when they've grown.
 
@@ -52,11 +60,14 @@ Penalties: being *ratioed* (more replies and quotes than likes), each red flag, 
 
 | Verdict | When |
 |---|---|
-| **Loved** | GitHub counts most: 1,000+ stars or 10,000+ release downloads, whatever the X post did (unless the replies are clearly negative); or 100+ stars / 500+ downloads with a score of 50+ |
-| **Hyped, unproven** | score 60+ and mostly positive replies on X, but no repo or one nobody uses yet |
-| **Mixed** | in between, or a well-used repo with clearly negative replies |
-| **Don't touch** | a serious red flag raised by several people (scam/malware, stolen code, security issue), a removed repo, or a low score / mostly negative replies without GitHub to back it |
-| **New & untested** | under 20 likes and 5 reposts, or under 24 hours old with no replies read yet, and no real GitHub use |
+| **❤️ Loved** | real use on GitHub (100+ stars or 500+ downloads on the poster's own repo, 1,000+ / 10,000+ counts regardless of score) and a real crowd on X (20+ likes or 5+ reposts), replies not clearly negative |
+| **⭐ Proven on GitHub** | the same GitHub use, but quiet on X so far |
+| **🔥 Hyped, unproven** | score 60+ and mostly positive replies on X, but no repo or one nobody uses yet |
+| **😐 Mixed** | in between, or a well-used repo with clearly negative replies |
+| **☠️ Don't touch** | a serious red flag raised by at least two different accounts (scam/malware, stolen code, security issue), a removed repo, or a low score / mostly negative replies without GitHub to back it |
+| **🆕 New & untested** | too little reach, or under 24 hours old with no replies read yet, and no real GitHub use |
+
+A famous repo (10,000+ stars) that isn't the poster's own never becomes a card's subject: the post keeps its own project name without the repo, or is left off the page. Each account counts once per project.
 
 GitHub only counts when the repo is the poster's own: its owner matches their X handle or name (or a 5+ letter word of it, so `Anil-matcha` matches `@matchaman11`), or it was created at most 120 days before the post, so it's the clone itself even when a curator shares it. Linking someone else's famous project borrows nothing.
 
@@ -72,6 +83,8 @@ Repository secrets (**Settings → Secrets and variables → Actions**):
 The Actions token (`github.token`) covers the GitHub checks. Without the secrets the scan fails and the previous catalog is republished.
 
 **Cost:** X bills per post read, so each run is capped with `--max-reads` (1,000 in the workflow, at most ~3,000 a day at 3 runs). Lower it, or the run frequency in `.github/workflows/pages.yml`, to fit your plan. The run log ends with the reads, Haiku calls and tokens used. Haiku costs a few cents a day.
+
+**Domain:** flattery.sala.company (`CNAME`; DNS: CNAME `flattery` → `jamalxcode.github.io`).
 
 **Timer:** GitHub's own schedule runs late and sometimes not at all, so, as for heat, a cron-job.org job can start the workflow through GitHub's API (`POST /repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches`, fine-grained token with *Actions: read and write*). Set it to every 8 hours. To run a scan by hand: **Actions → Scan and deploy → Run workflow**.
 
