@@ -607,7 +607,8 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
   // than a product ("Reverse engineering tools", "paid TTS services"). A clone catalog lists
   // clones of something; a general tool like a reverse-engineering kit isn't one.
   const noOriginal = g => !g.product && !realOriginal(g.original_clean) && !realOriginal(g.original);
-  const anonymous = g => noOriginal(g) || (!g.project && !g.display_name && !g.repo);
+  // (a card with no name of its own but a real original shows as "<original> clone")
+  const anonymous = g => noOriginal(g);
   const shown = groups.filter(g => g.status !== "ok" || !(quiet(g) || unnoticed(g) || anonymous(g)));
   counts.hidden = groups.length - shown.length;
   if (counts.hidden) log(`hidden: ${counts.hidden} projects still tiny, unnoticed, or not naming an app they clone`);
