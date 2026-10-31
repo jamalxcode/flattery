@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flattery</title>
-<meta name="description" content="Find AI-built (vibe coded) reimplementations of software on GitHub.">
+<meta name="description" content="A catalog of software clones found on X, ranked by how people received them.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪞</text></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -13,78 +13,23 @@
   <header>
     <h1>Flattery</h1>
     <blockquote>“Imitation is the sincerest form of flattery that mediocrity can pay to greatness.”<cite>— Oscar Wilde</cite></blockquote>
-    <p class="lead">Finds GitHub projects that look like AI-built (“vibe coded”) reimplementations of existing software, and shows the evidence for each one.</p>
+    <p class="lead">Clones, reverse-engineered and reimagined versions of existing software, found on X and ranked by how people received them: likes, reposts, the tone of the replies, and GitHub stars and downloads to confirm.</p>
   </header>
-
-  <nav class="tabs" role="tablist">
-    <button type="button" role="tab" id="tabLive" aria-selected="true">Latest scan</button>
-    <button type="button" role="tab" id="tabOwn" aria-selected="false">Run your own scan</button>
-  </nav>
 
   <section id="livePane">
     <p class="status" id="liveStatus">Loading the latest scan…</p>
     <div id="live"></div>
   </section>
 
-  <section id="ownPane" hidden>
-  <form class="panel" id="form" autocomplete="off">
-    <div class="grid">
-      <label class="field">GitHub token (optional)
-        <input type="password" id="token" placeholder="ghp_… or github_pat_…">
-      </label>
-      <label class="field">Target project name (optional)
-        <input id="target" placeholder="e.g. redis, ffmpeg, chardet">
-      </label>
-      <label class="field">Original repo to compare with (optional)
-        <input id="original" placeholder="owner/repo, e.g. redis/redis" pattern="[\w.\-]+/[\w.\-]+">
-      </label>
-      <label class="field">Created on or after
-        <input type="date" id="since">
-      </label>
-      <label class="field">Language
-        <input id="language" placeholder="any">
-      </label>
-      <label class="field">Minimum stars
-        <input type="number" id="minStars" min="0" value="0">
-      </label>
-      <label class="field">Results per query
-        <input type="number" id="perQuery" min="5" max="100" value="20">
-      </label>
-      <label class="field">Max repos to analyse
-        <input type="number" id="maxRepos" min="1" max="500" value="60">
-      </label>
-      <label class="field">Also analyse these repos (one owner/repo per line)
-        <textarea id="repos" rows="1"></textarea>
-      </label>
-    </div>
-    <div class="checks">
-      <label><input type="checkbox" id="codeSearch" checked> code search for agent files (needs a token; 10 req/min)</label>
-      <label><input type="checkbox" id="commitSearch" checked> commit search for AI co-author trailers</label>
-      <label><input type="checkbox" id="remember"> remember token on this device</label>
-    </div>
-    <div class="actions">
-      <button type="submit" class="primary" id="run">Scan GitHub</button>
-      <button type="button" id="stop" disabled>Stop</button>
-      <button type="button" id="demo">Show demo</button>
-      <button type="button" id="dlHtml" disabled>Download HTML report</button>
-      <button type="button" id="dlJson" disabled>Download JSON</button>
-    </div>
-    <p class="hint">Works without a token, but GitHub then allows only 60 requests an hour from your network (about 25 repos) and no code search.
-      A token raises that to 5,000 an hour. It stays in your browser and is sent only to api.github.com; a fine-grained token with no extra permissions is enough.
-      <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create one</a>.</p>
-    <div class="log" id="log" hidden></div>
-  </form>
-
-  <div id="report"></div>
-  </section>
-
   <div class="note">
-    <b>How to read this.</b> <span style="color:var(--ai)">AI-built</span> counts agent config files (CLAUDE.md, AGENTS.md, .cursorrules…),
-    AI co-author trailers in recent commits, burst or big-bang commit history and typical README style.
-    <span style="color:var(--re)">Reimplementation</span> counts claims like “drop-in replacement”, “clean-room”, “rewrite of” and “compatible with”.
-    The combined score is the geometric mean of the two, so a repo needs both to score high. <span style="color:var(--orig)">Original</span> chips appear when you
-    name an original repo. A changed license or a high file-name overlap is a reason to check provenance by hand, not proof of copying.
-    The scores are heuristics: a repo with no signals isn't necessarily human-written, and one with many signals isn't necessarily a legal problem.
+    <b>How to read this.</b> Flattery searches X for posts announcing clones, reverse-engineered or reimagined versions of existing software,
+    and Claude Haiku keeps only real announcements. The <b>reception</b> score combines likes, reposts and bookmarks, engagement per view,
+    the tone of the replies and quote posts (read by Haiku), and the linked GitHub repo's stars, downloads and star growth.
+    A post is <b style="color:var(--ok)">well received</b> only when GitHub confirms it (at least 100 stars or 500 release downloads) and people
+    are mostly positive. <b style="color:var(--re)">Buzz, not confirmed</b> means a popular post with no repo or one nobody uses yet.
+    <b style="color:var(--hi)">Stay away</b> means mostly negative replies, a pile-on (many more replies than likes), a removed repo,
+    or a serious red flag such as scam, malware or stolen code. Posts under 24 hours old or with little reach are <b>too early to tell</b>.
+    This is crowd opinion, not a legal or technical judgement.
   </div>
 </div>
 <script src="render.js"></script>

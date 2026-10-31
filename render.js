@@ -1,107 +1,129 @@
-// Renders a results list. Shared by the live app and the downloaded standalone report.
+// Renders the catalog. Shared by the live page and the standalone report.
 function renderReport(root, DATA, INFO) {
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const cls = v => v >= 60 ? "hi" : v >= 35 ? "mid" : "lo";
-  const bar = (label, v, color) => `<span class="bar">${label}<i><em style="width:${v}%;background:${color}"></em></i><b>${v}</b></span>`;
+  const num = v => (v || 0).toLocaleString("en", { notation: v >= 10000 ? "compact" : "standard", maximumFractionDigits: 1 });
+  const VERDICTS = [
+    ["well-received", "Well received", "ok"], ["unconfirmed", "Buzz, not confirmed", "re"], ["mixed", "Mixed", "mid"],
+    ["stay-away", "Stay away", "hi"], ["too-early", "Too early", "lo"],
+  ];
+  const vName = v => VERDICTS.find(x => x[0] === v)?.[1] || v;
+  const vCls = v => VERDICTS.find(x => x[0] === v)?.[2] || "lo";
+  const label = p => p.vendor === p.name ? p.name : `${p.vendor} ${p.name}`;
+  const what = e => e.product ? label(e.product) : e.original;
 
   if (!root.dataset.ready) {
     root.innerHTML = `
       <p class="sub" data-r="sub"></p>
-      <div data-r="banner"></div>
       <div class="stats" data-r="stats"></div>
       <div class="controls">
-        <input type="search" data-r="q" placeholder="Filter by name, description, signal…" aria-label="Filter">
-        <label>Sort <select data-r="sort">
-          <option value="combined">Combined score</option>
-          <option value="ai_score">AI-built score</option>
-          <option value="reimpl_score">Reimplementation score</option>
-          <option value="stars">Stars</option>
-          <option value="created">Newest</option>
+        <input type="search" data-r="q" placeholder="Filter by project, author, product…" aria-label="Filter">
+        <label>Verdict <select data-r="verdict">
+          <option value="well-received">well received</option><option value="good">well received + buzz</option>
+          <option value="all">all</option>${VERDICTS.map(([v, n]) => `<option value="${v}">${n.toLowerCase()}</option>`).join("")}
         </select></label>
         <label>Kind <select data-r="kind">
-          <option value="retail">retail product clones</option><option value="all">all repos</option>
+          <option value="">any</option><option value="clone">clone</option><option value="reverse-engineered">reverse-engineered</option>
+          <option value="reimagined">reimagined</option><option value="port">port</option>
         </select></label>
-        <label data-r="productWrap">Product <select data-r="product"></select></label>
-        <label>Show <select data-r="show">
-          <option value="live">live repos</option><option value="all">all, incl. removed</option><option value="changed">removed, renamed or archived</option>
+        <label>Of <select data-r="product"></select></label>
+        <label>Sort <select data-r="sort">
+          <option value="score">Reception</option><option value="likes">Likes</option><option value="stars">GitHub stars</option>
+          <option value="downloads">Downloads</option><option value="newest">Newest</option>
         </select></label>
-        <label>Min combined <select data-r="min">
-          <option value="0">any</option><option value="20">20+</option><option value="40">40+</option><option value="60">60+</option>
-        </select></label>
+        <label><input type="checkbox" data-r="gone"> show removed</label>
       </div>
       <div data-r="list"></div>`;
     root.dataset.ready = "1";
-    root.querySelectorAll("[data-r=q],[data-r=sort],[data-r=min],[data-r=show],[data-r=kind],[data-r=product]").forEach(el => el.addEventListener("input", () => renderReport(root, DATA, INFO)));
+    root.querySelectorAll("input,select").forEach(el => el.addEventListener("input", () => renderReport(root, DATA, INFO)));
   }
   const $ = k => root.querySelector(`[data-r=${k}]`);
-  // A new data set opens on retail clones when it has any
+  // A new data set opens on the well-received list when it has any
   if (root._data !== DATA) {
     root._data = DATA;
-    $("kind").value = DATA.some(r => r.product) ? "retail" : "all";
+    $("verdict").value = DATA.some(e => e.reception.verdict === "well-received") ? "well-received" : "all";
   }
 
-  $("sub").textContent = `${INFO.generated ? "Generated " + INFO.generated + " · " : ""}${DATA.length} repositories analysed` +
-    (INFO.target ? ` · target: “${INFO.target}”` : "") + (INFO.original ? ` · original: ${INFO.original}` : "");
-  $("banner").innerHTML = INFO.demo ? '<div class="banner">Demo data. These repositories are invented to preview the layout.</div>' : "";
+  const live = DATA.filter(e => e.status !== "gone");
+  $("sub").textContent = `${INFO.generated ? "Updated " + INFO.generated + " · " : ""}${live.length} clones found on X`;
+  const by = v => live.filter(e => e.reception.verdict === v).length;
+  $("stats").innerHTML = [
+    [by("well-received"), "well received, confirmed on GitHub"],
+    [by("unconfirmed"), "buzz on X, not confirmed on GitHub"],
+    [by("mixed"), "mixed reception"],
+    [by("stay-away"), "stay away"],
+    [by("too-early"), "too early to tell"],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${esc(s)}</span></div>`).join("");
 
-  const label = p => p.vendor === p.name ? p.name : `${p.vendor} ${p.name}`;
-  const n = k => DATA.filter(r => r[k] >= 60).length;
-  const retail = DATA.filter(r => r.product && r.link !== "gone");
-  const stats = [
-    [DATA.length, "repos analysed"],
-    [retail.length, `retail product clones (${new Set(retail.map(r => r.product.name)).size} products)`],
-    [n("combined"), "likely AI-built reimplementations (60+)"],
-    [n("ai_score"), "strong AI-built signals"],
-    [n("reimpl_score"), "strong reimplementation claims"],
-  ];
-  if (INFO.original) stats.push([DATA.filter(r => r.orig_signals.length).length, "flagged vs original"]);
-  const gone = DATA.filter(r => r.link === "gone").length, moved = DATA.filter(r => r.previously?.length).length;
-  if (gone || moved) stats.push([gone + moved, `removed (${gone}) or renamed (${moved})`]);
-  $("stats").innerHTML = stats.map(([b, s]) => `<div class="stat"><b>${b}</b><span>${esc(s)}</span></div>`).join("");
-
-  const q = $("q").value.trim().toLowerCase();
-  const key = $("sort").value, min = +$("min").value;
-  // Product list: what the retail clones reimplement, most cloned first
   const counts = new Map();
-  for (const r of retail) counts.set(label(r.product), (counts.get(label(r.product)) || 0) + 1);
+  for (const e of live) if (what(e)) counts.set(what(e), (counts.get(what(e)) || 0) + 1);
   const pick = $("product").value;
-  $("product").innerHTML = '<option value="">all products</option>' + [...counts].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+  $("product").innerHTML = '<option value="">anything</option>' + [...counts].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
     .map(([p, c]) => `<option value="${esc(p)}"${p === pick ? " selected" : ""}>${esc(p)} (${c})</option>`).join("");
-  const kind = $("kind").value;
-  $("productWrap").hidden = kind !== "retail" || !counts.size;
-  const show = $("show").value;
-  let rows = DATA.filter(r => r.combined >= min &&
-    (kind === "all" || (r.product && (!pick || label(r.product) === pick))) && (
-    show === "all" || (show === "live" ? r.link !== "gone" : r.link === "gone" || r.link === "archived" || r.previously?.length)));
-  if (q) rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(q));
-  rows.sort((a, b) => key === "created" ? b.created.localeCompare(a.created) : b[key] - a[key]);
+
+  const q = $("q").value.trim().toLowerCase(), verdict = $("verdict").value, kind = $("kind").value, key = $("sort").value;
+  let rows = DATA.filter(e => ($("gone").checked || e.status !== "gone") &&
+    (verdict === "all" || e.reception.verdict === verdict || (verdict === "good" && ["well-received", "unconfirmed"].includes(e.reception.verdict))) &&
+    (!kind || e.kind === kind) && (!pick || what(e) === pick));
+  if (q) rows = rows.filter(e => JSON.stringify([e.text, e.project, e.original, e.summary, e.author, e.repo]).toLowerCase().includes(q));
+  const sorts = {
+    score: e => e.reception.score, likes: e => e.metrics.likes, stars: e => e.github?.stars ?? -1,
+    downloads: e => e.github?.downloads ?? -1, newest: e => Date.parse(e.created_at),
+  };
+  rows.sort((a, b) => sorts[key](b) - sorts[key](a));
   if (!rows.length) {
-    $("list").innerHTML = `<div class="empty">${DATA.length ? "No repositories match. Try lowering the minimum score or showing all." : "No results yet."}</div>`;
+    $("list").innerHTML = `<div class="empty">${DATA.length ? "Nothing matches. Try another verdict or “all”." : "No results yet."}</div>`;
     return;
   }
-  $("list").innerHTML = rows.map(r => `
-    <div class="card${r.link === "gone" ? " is-gone" : ""}">
-      <div class="score"><div class="big ${cls(r.combined)}">${r.combined}</div><div class="lbl">combined</div></div>
+
+  const sentimentBar = s => {
+    if (!s?.sampled) return "";
+    const pc = n => Math.round(100 * n / s.sampled);
+    return `<div class="senti" title="${s.sampled} replies and quotes read">
+      <i><em class="pos" style="width:${pc(s.positive)}%"></em><em class="neu" style="width:${pc(s.neutral)}%"></em><em class="neg" style="width:${pc(s.negative)}%"></em></i>
+      <span><b class="pos">${s.positive}</b> positive · ${s.neutral} neutral · <b class="neg">${s.negative}</b> negative</span></div>`;
+  };
+  const githubBox = e => {
+    const g = e.github;
+    if (!e.repo) return '<div class="gh none">No GitHub repo linked</div>';
+    const link = `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener">${esc(e.repo)}</a>`;
+    if (!g) return `<div class="gh">${link} <span class="muted">not checked yet</span></div>`;
+    if (g.status === "gone") return `<div class="gh">${link} <span class="chip gone">repo removed</span></div>`;
+    const h = g.stars_history || [];
+    const days = h.length > 1 ? (Date.parse(h.at(-1).at) - Date.parse(h[0].at)) / 864e5 : 0;
+    const growth = days >= 0.9 ? Math.round((h.at(-1).stars - h[0].stars) / days) : null;
+    return `<div class="gh${e.reception.confirmed ? " ok" : ""}">${link}
+      <span>★ ${num(g.stars)}</span><span>⑂ ${num(g.forks)}</span><span>⬇ ${num(g.downloads)} downloads</span>
+      ${growth != null ? `<span>${growth >= 0 ? "+" : ""}${num(growth)} stars/day</span>` : ""}
+      ${g.language ? `<span>${esc(g.language)}</span>` : ""}<span>license ${esc(g.license || "none")}</span>
+      ${g.status === "archived" ? '<span class="chip moved">archived</span>' : ""}</div>`;
+  };
+
+  $("list").innerHTML = rows.map(e => {
+    const m = e.metrics, r = e.reception;
+    return `
+    <div class="card${e.status === "gone" ? " is-gone" : ""}">
+      <div class="score"><div class="big ${vCls(r.verdict)}">${r.score}</div><div class="lbl">reception</div></div>
       <div class="body">
-        <a class="name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.repo)}</a>
-        ${r.link === "gone" ? `<span class="chip gone" title="${esc(r.link_reason || "")}">removed${r.gone_since ? " since " + esc(r.gone_since) : ""}</span>` : ""}
-        ${r.link === "archived" ? '<span class="chip moved">archived</span>' : ""}
-        ${r.product ? `<span class="chip product">≈ ${esc(label(r.product))}</span>` : ""}
-        ${r.previously?.length ? `<span class="chip moved">renamed from ${r.previously.map(esc).join(", ")}</span>` : ""}
-        <div class="desc">${esc(r.description) || "<i>no description</i>"}</div>
+        <span class="verdict ${vCls(r.verdict)}">${esc(vName(r.verdict))}</span>
+        <span class="name">${esc(e.project || e.repo?.split("/")[1] || "Untitled project")}</span>
+        ${what(e) ? `<span class="chip product">≈ ${esc(what(e))}</span>` : ""}
+        <span class="chip kind">${esc(e.kind)}</span>
+        ${e.status === "gone" ? `<span class="chip gone">post removed${e.gone_since ? " since " + esc(e.gone_since) : ""}</span>` : ""}
+        ${e.summary ? `<div class="desc">${esc(e.summary)}</div>` : ""}
+        <blockquote class="post"><p>${esc(e.text) || "<i>post removed</i>"}</p><cite><a href="${esc(e.url)}" target="_blank" rel="noopener">@${esc(e.author.username)}</a> · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}</cite></blockquote>
         <div class="meta">
-          <span>★ ${r.stars.toLocaleString()}</span>${r.language ? `<span>${esc(r.language)}</span>` : ""}
-          <span>license ${esc(r.license || "none")}</span><span>created ${esc(r.created)}</span>${r.first_seen ? `<span>first seen ${esc(r.first_seen)}</span>` : ""}
-          <span>${r.commits_sampled}${r.commits_sampled === 100 ? "+" : ""} commits</span><span>${r.file_count} files</span>
-          ${r.path_overlap != null ? `<span>overlap ${Math.round(r.path_overlap * 100)}%</span>` : ""}
+          <span>♥ ${num(m.likes)}</span><span>⟲ ${num(m.reposts)}</span><span>💬 ${num(m.replies)}</span><span>❝ ${num(m.quotes)}</span>
+          <span>🔖 ${num(m.bookmarks)}</span>${m.views ? `<span>👁 ${num(m.views)}</span>` : ""}
         </div>
-        <div class="bars">${bar("AI-built", r.ai_score, "var(--ai)")}${bar("Reimpl.", r.reimpl_score, "var(--re)")}</div>
+        ${sentimentBar(e.sentiment)}
+        ${e.sentiment?.summary ? `<div class="desc">“${esc(e.sentiment.summary)}”</div>` : ""}
+        ${githubBox(e)}
         <div class="chips">
-          ${r.ai_signals.map(s => `<span class="chip ai">${esc(s.label)} +${s.points}</span>`).join("")}
-          ${r.reimpl_signals.map(s => `<span class="chip re">${esc(s.label)} +${s.points}</span>`).join("")}
-          ${r.orig_signals.map(s => `<span class="chip orig">${esc(s.label)}</span>`).join("")}
+          ${(e.sentiment?.flags || []).map(f => `<span class="chip flag">${esc(f.replaceAll("-", " "))}</span>`).join("")}
+          ${r.reasons.filter(s => e.repo || !/^no GitHub repo/.test(s)).map(s => `<span class="chip note">${esc(s)}</span>`).join("")}
         </div>
-        <details><summary>found by</summary>${r.found_by.map(esc).join("<br>")}</details>
+        <details><summary>score parts</summary>${Object.entries(r.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}<br>found by: ${e.found_by.map(esc).join("<br>")}</details>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }

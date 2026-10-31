@@ -115,10 +115,18 @@ export function detectProduct(description, readme) {
   return best && { name: best.name, vendor: best.vendor };
 }
 
-// Repo-search queries for one product, for rotating discovery.
-const TEMPLATES = ['"{p}" reimplementation in:description,readme', '"{p}" clone in:description', '"{p}" alternative in:description'];
-// Names that need their vendor to match ("Microsoft Word") are searched with it.
-export const PRODUCT_QUERIES = PRODUCTS.flatMap(([name, vendor, alias, search]) => {
+// X search query for one product, for rotating discovery. Names that need their vendor
+// to match ("Microsoft Word") are searched with it.
+const CLONE_WORDS = '(clone OR "open source alternative" OR rebuilt OR recreated OR reimplementation OR "reverse engineered" OR "built my own")';
+export const PRODUCT_QUERIES = PRODUCTS.map(([name, vendor, alias, search]) => {
   const term = search || (new RegExp(`^(?:${alias})$`, "i").test(name) ? name : `${vendor} ${name}`);
-  return TEMPLATES.map(t => ({ product: name, q: t.replace("{p}", term) }));
+  return { product: name, q: `"${term}" ${CLONE_WORDS} has:links -is:retweet -is:reply` };
 });
+
+// Maps a product name as Haiku wrote it ("Adobe Photoshop", "photoshop") to the catalog entry.
+export function matchProduct(original) {
+  if (!original) return null;
+  for (const [name, vendor, alias] of PRODUCTS)
+    if (new RegExp(`^(?:${vendor}\\s+)?(?:${alias})$`, "i").test(original.trim())) return { name, vendor };
+  return null;
+}

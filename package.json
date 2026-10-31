@@ -1,1 +1,6 @@
-{ "private": true, "type": "module" }
+{
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node tools/test.mjs", "scan": "node tools/scan.mjs" },
+  "dependencies": { "@anthropic-ai/sdk": "1.3.0" }
+}
