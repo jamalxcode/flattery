@@ -130,6 +130,8 @@ assert.equal(by(r2, "p3").text, "", "removed posts lose their text");
 assert.equal(by(r2, "p1").github.stars_history.length, 2);
 assert.ok(by(r2, "p1").snapshots["24h"], "24h checkpoint recorded");
 assert.ok(x2.reads < firstReads, "known posts aren't searched again");
+assert.equal(by(r2, "p1").history.length, 1, "a rating that doesn't change isn't repeated in the history");
+assert.equal(by(r2, "p1").history[0].verdict, "well-received");
 
 // Backfill: full-archive search adds the older popular post (the tiny p4 is skipped)
 posts.p9 = oldPost;

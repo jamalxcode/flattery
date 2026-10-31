@@ -9,6 +9,9 @@ const RATINGS = [
   ["stay-away", "☠️", "Don't touch", "Mostly negative, a pile-on, a removed repo, or red flags like scams or stolen code.", "danger"],
 ];
 
+// Order for promotions and demotions
+const RANK = { "stay-away": 0, "too-early": 1, mixed: 2, unconfirmed: 3, "well-received": 4 };
+
 function renderReport(root, DATA, INFO, opts = {}) {
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const num = v => (v || 0).toLocaleString("en", { notation: v >= 10000 ? "compact" : "standard", maximumFractionDigits: 1 });
@@ -20,6 +23,19 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const ofLine = e => what(e) ? `${OF[e.kind] || "Clone of"} ${what(e)}` : (e.kind || "clone");
   const hue = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
   const live = DATA.filter(e => e.status !== "gone");
+  // The latest change of rating, if it happened in the last `days`
+  const moved = (e, days = 14) => {
+    const h = e.history || [];
+    if (h.length < 2 || Date.now() - Date.parse(h.at(-1).at) > days * 864e5) return null;
+    const prev = h.at(-2).verdict;
+    return { prev, up: RANK[e.reception.verdict] > RANK[prev] };
+  };
+  const moveLine = e => {
+    const m = moved(e);
+    if (!m) return "";
+    const [, emo, n] = rating(m.prev);
+    return `<p class="move ${m.up ? "up" : "down"}">${m.up ? "⬆ Promoted from" : "⬇ Was"} ${emo} ${n}</p>`;
+  };
   const search = opts.search || null;
 
   const art = e => {
@@ -44,6 +60,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
         </div>
         <div class="legend"><h2>Ratings</h2><div data-r="legend"></div></div>
       </section>
+      <section class="fresh" data-r="upWrap"><h2 class="section-title">⬆ Just promoted</h2><ul class="shelf" data-r="up"></ul></section>
       <section class="fresh" data-r="shelfWrap"><h2 class="section-title">❤️ Most loved</h2><ul class="shelf" data-r="shelf"></ul></section>
       <section id="apps">
         <div class="filters-row">
@@ -98,6 +115,14 @@ function renderReport(root, DATA, INFO, opts = {}) {
     <div class="art">${art(e)}</div><span class="name">${esc(name(e))}</span>
     <span class="meta">❤️ ${e.reception.score} · ★ ${num(e.github?.stars)} · ${esc(what(e) || e.kind)}</span></button></li>`).join("");
 
+  const promoted = live.filter(e => moved(e, 7)?.up).sort((a, b) => b.reception.score - a.reception.score);
+  $("upWrap").hidden = !promoted.length;
+  $("up").innerHTML = promoted.slice(0, 12).map(e => {
+    const [, pe] = rating(moved(e, 7).prev), [, ne] = rating(e.reception.verdict);
+    return `<li><button type="button" data-open="${esc(e.id)}"><div class="art">${art(e)}</div><span class="name">${esc(name(e))}</span>
+      <span class="meta">${pe} → ${ne} · ${esc(what(e) || e.kind)}</span></button></li>`;
+  }).join("");
+
   const chips = [["all", "All", live.length], ...RATINGS.map(([v, emo, n]) => [v, `${emo} ${n}`, by(v).length])];
   const gone = DATA.length - live.length;
   if (gone) chips.push(["gone", "🗑 Removed", gone]);
@@ -128,6 +153,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <div class="card-body">
         <h3><button type="button" data-open="${esc(e.id)}">${esc(name(e))}</button></h3>
         <p class="of">${esc(ofLine(e))}</p>
+        ${moveLine(e)}
         ${e.summary ? `<p class="sum">${esc(e.summary)}</p>` : ""}
         <div class="stats"><span class="score">${e.reception.score}</span><span>♥ ${num(e.metrics.likes)}</span>
           ${e.github && e.github.status !== "gone" ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
@@ -155,6 +181,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <div><h2>${esc(name(e))}</h2><p class="of">${esc(ofLine(e))}</p></div>
           <div class="verdict"><span class="emo">${emo}</span><span><b>${rname}</b><small>${rdesc}</small></span>
             <span class="big">${e.reception.score}<small>score</small></span></div>
+          ${(e.history || []).length > 1 ? `<p class="note-small">Rating history: ${e.history.map(x => `${rating(x.verdict)[1]} ${esc(x.at.slice(5))}`).join(" → ")}</p>` : ""}
           ${e.summary ? `<p>${esc(e.summary)}</p>` : ""}
           <div class="actions">
             ${e.repo && cls !== "danger" ? `<a class="primary" href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
