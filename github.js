@@ -24,9 +24,22 @@ async function graphql(token, query, log) {
   return null;
 }
 
-const FIELDS = `nameWithOwner url description isArchived isFork pushedAt createdAt stargazerCount forkCount
+const fields = since => `nameWithOwner url homepageUrl description isArchived isFork pushedAt createdAt stargazerCount forkCount
   watchers { totalCount } licenseInfo { spdxId } primaryLanguage { name }
-  releases(first: 10, orderBy: { field: CREATED_AT, direction: DESC }) { totalCount nodes { releaseAssets(first: 30) { nodes { downloadCount } } } }`;
+  defaultBranchRef { target { ... on Commit { history(since: "${since}") { totalCount } } } }
+  releases(first: 10, orderBy: { field: CREATED_AT, direction: DESC }) { totalCount nodes { releaseAssets(first: 30) { nodes { name downloadCount } } } }`;
+
+// Which systems a release can be installed on, from its file names
+export function platformsOf(names) {
+  const has = re => names.some(n => re.test(n));
+  return [
+    has(/\.(dmg|pkg)$|mac|darwin|osx|\.app\.(zip|tar)/i) && "Mac",
+    has(/\.(exe|msi|msix|appx)$|win(dows)?[-_.]|[-_.]win(64|32)?\b/i) && "Windows",
+    has(/\.(appimage|deb|rpm|snap|flatpak)$|linux/i) && "Linux",
+    has(/\.apk$|android/i) && "Android",
+    has(/\.ipa$/i) && "iOS",
+  ].filter(Boolean);
+}
 
 // Returns Map name -> stats, or { status: "gone" } for deleted, private or blocked repos.
 // Repos missing from the map couldn't be checked this run.
@@ -34,11 +47,12 @@ export async function repoStats(token, names, log) {
   const out = new Map();
   for (let i = 0; i < names.length; i += 50) {
     const batch = names.slice(i, i + 50);
-    const fields = batch.map((n, j) => {
+    const since = new Date(Date.now() - 30 * 864e5).toISOString();
+    const parts = batch.map((n, j) => {
       const [owner, name] = n.split("/");
-      return `r${j}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { ${FIELDS} }`;
+      return `r${j}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { ${fields(since)} }`;
     });
-    const res = await graphql(token, `query { ${fields.join("\n")} }`, log);
+    const res = await graphql(token, `query { ${parts.join("\n")} }`, log);
     if (!res?.data) continue;
     const errs = new Map((res.errors || []).map(e => [e.path?.[0], e.type || e.message]));
     batch.forEach((n, j) => {
@@ -55,6 +69,9 @@ export async function repoStats(token, names, log) {
         watchers: r.watchers?.totalCount || 0,
         releases: r.releases?.totalCount || 0,
         downloads: (r.releases?.nodes || []).reduce((s, rel) => s + (rel?.releaseAssets?.nodes || []).reduce((t, a) => t + (a?.downloadCount || 0), 0), 0),
+        platforms: platformsOf((r.releases?.nodes || []).flatMap(rel => (rel?.releaseAssets?.nodes || []).map(a => a?.name || ""))),
+        homepage: /^https?:\/\//.test(r.homepageUrl || "") && !/github\.com/.test(r.homepageUrl) ? r.homepageUrl : "",
+        commits_30d: r.defaultBranchRef?.target?.history?.totalCount ?? null,
         license: r.licenseInfo?.spdxId || "",
         language: r.primaryLanguage?.name || "",
         created: (r.createdAt || "").slice(0, 10),

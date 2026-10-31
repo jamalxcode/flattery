@@ -16,6 +16,7 @@ import { X } from "../x.js";
 import { Haiku } from "../haiku.js";
 import { repoStats, readmeImage } from "../github.js";
 import { run } from "../pipeline.js";
+import { makeSources } from "../sources.js";
 import { reportHtml } from "../report.js";
 
 const root = new URL("../", import.meta.url);
@@ -76,6 +77,7 @@ const { results, groups, info: runInfo } = await run(prev, {
   overrides,
 }, {
   x, haiku, log,
+  sources: makeSources(log),
   githubImage: readmeImage,
   githubStats: names => ghToken ? repoStats(ghToken, names, log) : (log("no GITHUB_TOKEN, skipping GitHub checks", "warn"), new Map()),
 });

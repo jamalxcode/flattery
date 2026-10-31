@@ -35,8 +35,31 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const xIntent = (text, url) => "https://x.com/intent/tweet?text=" + encodeURIComponent(text) + (url ? "&url=" + encodeURIComponent(url) : "");
   const name = e => e.project || e.display_name || e.repo?.split("/")[1] || what(e) && `${what(e)} clone` || "Untitled";
   // Each project's own page (static, with its own preview image for sharing)
+  const slug = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const altUrl = e => what(e) ? `${SITE}alternatives/${slug(what(e))}/` : "";
   const pageUrl = e => e.code ? `${SITE}p/${e.code}/` : `${SITE}#p=${encodeURIComponent(e.id)}`;
+  const src = e => e.source === "hn" ? "Hacker News" : e.source === "reddit" ? "Reddit" : "X";
   const unrated = v => v === "too-early" || v === "faded";
+  // Can I use it? From the poster's own repo: installers in its releases, a web demo, a license,
+  // and whether anyone still works on it
+  const usable = e => {
+    const g = e.github && e.github.status !== "gone" && e.reception?.repo_counted !== false ? e.github : null;
+    if (!g) return null;
+    const days = g.pushed_at ? (Date.now() - Date.parse(g.pushed_at)) / 864e5 : null;
+    const age = g.created ? (Date.now() - Date.parse(g.created)) / 864e5 : 999;
+    return {
+      ready: g.platforms?.length ? "install" : g.homepage ? "online" : "source",
+      platforms: g.platforms || [], homepage: g.homepage,
+      licensed: !!g.license && g.license !== "NOASSERTION",
+      alive: g.status === "archived" || (days != null && days > 30 && age > 30) ? "abandoned" : g.commits_30d > 0 || (days != null && days <= 14) ? "active" : "quiet",
+      days, commits: g.commits_30d,
+    };
+  };
+  const useLine = e => {
+    const u = usable(e);
+    if (!u) return "";
+    return `<p class="use">${u.ready === "install" ? `⬇ ${u.platforms.join(" · ")}` : u.ready === "online" ? "🌐 Try online" : "📦 Source only"}${!u.licensed ? ' <span class="warn" title="No license: you may not be allowed to use it">⚠ no license</span>' : ""}${u.alive === "abandoned" ? ' <span class="dead">🪦 abandoned</span>' : ""}</p>`;
+  };
   const OF = { clone: "Clone of", "reverse-engineered": "Reverse-engineered", reimagined: "Reimagined", port: "Port of" };
   const ofLine = e => what(e) ? `${OF[e.kind] || "Clone of"} ${what(e)}` : (e.kind || "clone");
   const hue = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
@@ -76,15 +99,15 @@ function renderReport(root, DATA, INFO, opts = {}) {
     root.innerHTML = `
       <section class="hero">
         <div class="hero-copy">
-          <div class="pills"><span class="pill accent" data-r="count"></span><span class="pill">Found on X · checked on GitHub</span></div>
+          <div class="pills"><span class="pill accent" data-r="count"></span><span class="pill">Found on X, Hacker News &amp; Reddit · checked on GitHub</span></div>
           <blockquote class="tagline">“Imitation is the sincerest form of flattery.”<span>Hence the name: every project here imitates software you already know.</span></blockquote>
           <h1>Software clones, <em>rated by the crowd.</em></h1>
-          <p class="lede">Reverse-engineered, reimagined and cloned versions of apps you know, found on X and ranked by how people reacted: likes, reposts, the tone of the replies, and GitHub stars and downloads as proof.</p>
+          <p class="lede">Reverse-engineered, reimagined and cloned versions of apps you know, found on X, Hacker News and Reddit and ranked by how people reacted: likes, reposts, the tone of the replies, and GitHub stars and downloads as proof.</p>
           <p class="status" data-r="status"></p>
+          <button type="button" class="newslink" data-r="newsBtn" data-news hidden></button>
         </div>
         <div class="legend"><h2>Ratings</h2><div data-r="legend"></div></div>
       </section>
-      <section class="news" id="news" data-r="newsWrap"></section>
       <section class="fresh" data-r="riseWrap"><h2 class="section-title">📈 Rising on GitHub</h2><ul class="shelf" data-r="rise"></ul></section>
       <section class="fresh" data-r="upWrap"><h2 class="section-title">⬆ Just promoted</h2><ul class="shelf" data-r="up"></ul></section>
       <section class="fresh" data-r="shelfWrap"><h2 class="section-title">❤️ Most loved</h2><ul class="shelf" data-r="shelf"></ul></section>
@@ -96,12 +119,17 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <div class="selects">
             ${search ? "" : `<input type="search" class="search" data-r="q" placeholder="Search clones…" aria-label="Search clones" style="padding-left:16px;height:40px;width:200px">`}
             <select data-r="product" aria-label="Clones of"></select>
+            <select data-r="use" aria-label="Can I use it">
+              <option value="">Usable or not</option><option value="install">Ready to install</option><option value="online">Try online</option>
+              <option value="licensed">Has a license</option><option value="alive">Still maintained</option>
+            </select>
             <select data-r="sort" aria-label="Sort">
               <option value="score">Top rated</option><option value="likes">Most liked</option><option value="stars">Most GitHub stars</option>
               <option value="downloads">Most downloads</option><option value="newest">Newest</option>
             </select>
           </div>
         </div>
+        <div class="alt-title" data-r="altTitle" hidden></div>
         <p class="results" data-r="results" hidden></p>
         <ul class="grid" data-r="grid"></ul>
       </section>
@@ -112,7 +140,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
         <p class="note-small">Listings removed automatically after enough people objected on X (six or more established accounts, real reasons, spread over time).</p>
         <ul class="posts" data-r="down"></ul></details>
       <details class="rejected" data-r="statusWrap"><summary>Status</summary><div data-r="statusBody"></div></details>
-      <dialog class="sheet" data-r="sheet"></dialog>`;
+      <dialog class="sheet" data-r="sheet"></dialog>
+      <dialog class="drawer" id="news" data-r="newsDrawer" aria-label="This week in clones"></dialog>`;
     root.dataset.ready = "1";
     root._filter = "rated";
     const rerender = () => renderReport(root, root._data, root._info, opts);
@@ -143,8 +172,14 @@ function renderReport(root, DATA, INFO, opts = {}) {
         if (f.closest("[data-r=legend]")) root.querySelector("#apps").scrollIntoView({ behavior: "smooth" });
         return;
       }
+      if (ev.target.closest("[data-news]")) { root.flattery.news(); return; }
       const o = ev.target.closest("[data-open]");
       if (o) root.flattery.open(o.dataset.open);
+    });
+    const drawer = root.querySelector("[data-r=newsDrawer]");
+    drawer.addEventListener("click", ev => {
+      if (ev.target === drawer || ev.target.closest(".close")) drawer.close();
+      else if (ev.target.closest("[data-open]")) drawer.close();
     });
     const sheet = root.querySelector("[data-r=sheet]");
     sheet.addEventListener("click", ev => {
@@ -214,11 +249,18 @@ function renderReport(root, DATA, INFO, opts = {}) {
   $("cats").innerHTML = catCount.size ? [["", "All categories", live.length], ...CATEGORIES.filter(c => catCount.has(c)).map(c => [c, c, catCount.get(c)])]
     .map(([v, t, n]) => `<button type="button" class="cat" data-cat="${esc(v)}" aria-pressed="${(root._cat || "") === v}">${esc(t)} <span class="n">${n}</span></button>`).join("") : "";
 
+  const useWant = $("use").value;
+  const useOk = e => {
+    if (!useWant) return true;
+    const u = usable(e);
+    return !!u && (useWant === "install" ? u.ready === "install" : useWant === "online" ? u.ready !== "source" :
+      useWant === "licensed" ? u.licensed : u.alive !== "abandoned");
+  };
   const q = (search || $("q")).value.trim().toLowerCase();
   // A search looks through every rating, not only the current filter
   const f = q && root._filter === "rated" ? "all" : root._filter;
   let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? !unrated(e.reception.verdict) : e.reception.verdict === f))) &&
-    (!pick || what(e) === pick) && (!root._cat || e.category === root._cat));
+    (!pick || what(e) === pick) && (!root._cat || e.category === root._cat) && useOk(e));
   // Every word must appear somewhere in the project: its name, what it clones, its rating,
   // category, repo, summary, posters and posts ("adobe photoshop", "loved word", "rust")
   if (q) {
@@ -232,6 +274,12 @@ function renderReport(root, DATA, INFO, opts = {}) {
   }
   $("results").hidden = !q;
   if (q) $("results").innerHTML = `${rows.length ? `<b>${rows.length}</b> ${rows.length === 1 ? "result" : "results"}` : "No results"} for “${esc(q)}” <button type="button" data-clear>Clear search</button>`;
+  // Picking an app turns the list into "Free alternatives to X"
+  $("altTitle").hidden = !pick;
+  if (pick) {
+    const p = PRICES[pick.toLowerCase()];
+    $("altTitle").innerHTML = `<h2>Free alternatives to ${esc(pick)}</h2><p>${rows.length} ${rows.length === 1 ? "clone" : "clones"} found online, rated by the crowd and checked on GitHub${p ? `, each saving about $${p} a year` : ""}. Best rated first.</p>`;
+  }
   const sorts = {
     score: e => e.reception.score - (e.reception.verdict === "stay-away" ? 1000 : 0), likes: e => e.metrics.likes,
     stars: e => e.github?.stars ?? -1, downloads: e => e.github?.downloads ?? -1, newest: e => Date.parse(e.created_at),
@@ -247,10 +295,11 @@ function renderReport(root, DATA, INFO, opts = {}) {
         <h3><button type="button" data-open="${esc(e.id)}">${esc(name(e))}</button></h3>
         <p class="of">${esc(ofLine(e))}${price(e) ? ` <span class="save">saves ~$${price(e)}/yr</span>` : ""}</p>
         ${moveLine(e)}
+        ${useLine(e)}
         ${e.summary ? `<p class="sum">${esc(e.summary)}</p>` : ""}
         <div class="stats"><span class="score">${e.reception.score}</span><span>♥ ${num(e.metrics.likes)}</span>
           ${e.github && e.github.status !== "gone" && e.reception.repo_counted !== false ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
-          <span>${e.group ? `${e.posts.length} posts` : `@${esc(e.author.username)}`}</span>${e.objections ? `<span class="obj" title="objections counted">⚑ ${e.objections}</span>` : ""}${e.reception.disputed ? '<span class="obj" title="Some people raised a serious concern, most replies are positive">⚠️ Disputed</span>' : ""}</div>
+          <span>${e.group ? `${e.posts.length} posts` : e.source && e.source !== "x" ? `${src(e)} · ${esc(e.author.username)}` : `@${esc(e.author.username)}`}</span>${e.objections ? `<span class="obj" title="objections counted">⚑ ${e.objections}</span>` : ""}${e.trials ? `<span title="People who tried it">✅ ${e.trials.works} · ❌ ${e.trials.broken}</span>` : ""}${e.reception.disputed ? '<span class="obj" title="Some people raised a serious concern, most replies are positive">⚠️ Disputed</span>' : ""}</div>
         ${mini(e.sentiment)}
       </div></article></li>`;
   }).join("") : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
@@ -260,16 +309,21 @@ function renderReport(root, DATA, INFO, opts = {}) {
   $("rej").innerHTML = rej.map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc(p.at)}</span><small>${esc(p.text)}</small></li>`).join("");
 
   // Newsletter: the latest issue, then the archive
-  const issues = INFO.newsletter || [];
+  // Haiku sometimes repeats the newsletter's name in the title
+  const issues = (INFO.newsletter || []).map(n => ({ ...n, title: String(n.title || "").replace(/^this week in clones\s*[:–-]\s*/i, "") }));
   const issueHtml = (n, latest) => `<div class="issue">
       <p class="issue-date">${latest ? "📰 This week in clones · " : ""}${esc(new Date(n.date + "T12:00:00Z").toLocaleDateString("en", { day: "numeric", month: "long", year: "numeric" }))}</p>
       <h${latest ? 2 : 3}>${esc(n.title)}</h${latest ? 2 : 3}><p>${esc(n.intro)}</p>
       <ul>${n.items.map(i => `<li><button type="button" data-open="${esc(i.id)}">${rating(i.verdict)[1]} <b>${esc(i.name)}</b></button> ${esc(i.blurb)}</li>`).join("")}</ul>
       <p>${esc(n.outro)}</p>
       <a class="xshare" href="${esc(xIntent(`📰 This week in clones: ${n.title}`, SITE + "#news=" + n.date))}" target="_blank" rel="noopener">Share on X</a></div>`;
-  $("newsWrap").hidden = !issues.length;
-  $("newsWrap").innerHTML = issues.length ? issueHtml(issues[0], true) + (issues.length > 1
+  // The newsletter lives in a drawer, so it never pushes the cards down
+  const fresh = issues[0] && Date.now() - Date.parse(issues[0].date + "T12:00:00Z") < 7 * 864e5;
+  $("newsBtn").hidden = !issues.length;
+  if (issues.length) $("newsBtn").innerHTML = `📰 This week: <b>${esc(issues[0].title)}</b>${fresh ? ' <span class="dot" aria-label="new"></span>' : ""}`;
+  $("newsDrawer").innerHTML = issues.length ? `<button type="button" class="close" aria-label="Close">×</button>` + issueHtml(issues[0], true) + (issues.length > 1
     ? `<details class="past"><summary>Past issues (${issues.length - 1})</summary>${issues.slice(1).map(n => issueHtml(n, false)).join("")}</details>` : "") : "";
+  root.dataset.newsFresh = fresh ? "1" : "";
 
   const down = [...(INFO.removed_projects || [])].reverse();
   $("downWrap").hidden = !down.length;
@@ -289,6 +343,22 @@ function renderReport(root, DATA, INFO, opts = {}) {
     <li>${num(live.length)} projects from ${num(DATA.reduce((s, e) => s + (e.posts?.length || 1), 0))} posts</li></ul>`;
 
   root.flattery = {
+    // Show one app's alternatives (used by /alternatives/<app>/ pages)
+    pick(name) {
+      const sel = $("product");
+      const opt = [...sel.options].find(o => o.value.toLowerCase() === String(name).toLowerCase());
+      if (!opt) return;
+      sel.value = opt.value;
+      root._filter = "all";
+      renderReport(root, root._data, root._info, opts);
+      root.querySelector("#apps").scrollIntoView({ block: "start" });
+    },
+    news() {
+      const d = $("newsDrawer");
+      if (!d.innerHTML) return;
+      if (!d.open) d.showModal();
+      d.scrollTop = 0;
+    },
     open(id) {
       // By card id, by one of its posts, or by project name, so old links survive id changes
       const key = s => String(s || "").toLowerCase().replace(/^(name|repo|post):/, "").replace(/[^a-z0-9]/g, "");
@@ -314,29 +384,40 @@ function renderReport(root, DATA, INFO, opts = {}) {
           ${e.summary ? `<p>${esc(e.summary)}</p>` : ""}
           <div class="actions">
             ${e.repo && cls !== "danger" ? `<a class="primary" href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
-            <a${e.repo && cls !== "danger" ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener">Open the post on X</a>
+            <a${e.repo && cls !== "danger" ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener">Open the post on ${src(e)}</a>
             ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow">☠️ Repo (don't run it)</a>` : ""}
+            ${altUrl(e) ? `<a href="${esc(altUrl(e))}">All ${esc(what(e))} alternatives</a>` : ""}
             <a href="${esc(pageUrl(e))}" data-share="${esc(e.id)}" data-url="${esc(pageUrl(e))}" onclick="event.preventDefault()">Copy link</a>
             <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, pageUrl(e)))}" target="_blank" rel="noopener">Share on X</a>
           </div>
-          ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>@${esc(e.author.username)} · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
+          ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>${src(e) === "X" ? `@${esc(e.author.username)} · ${num(e.author.followers)} followers` : `${esc(e.author.username)} on ${src(e)}`} · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
           ${e.group ? `<div><h4>${e.posts.length} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
             <a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc((p.created_at || "").slice(0, 10))}</span>
             <small>${esc(p.text) || "removed"}</small></li>`).join("")}</ul></div>` : ""}
           <div><h4>On X${e.group ? " · all posts" : ""}</h4><div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div></div>
           ${s?.sampled ? `<div class="senti"><h4>What people said · ${s.sampled} replies and quotes${e.reception.confidence === "low" ? ' · <span class="low">low confidence</span>' : ""}</h4>${mini(s)}
             <p>${s.positive} positive · ${s.neutral} neutral · ${s.negative} negative${s.summary ? ` — “${esc(s.summary)}”` : ""}</p></div>` : ""}
-          ${s?.flags?.length ? `<div><h4>What people on X raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div>
+          ${s?.flags?.length ? `<div><h4>What people on ${src(e)} raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div>
             ${Object.entries(s.evidence || {}).length ? `<ul class="posts evidence">${Object.entries(s.evidence).flatMap(([fl, list]) => list.map(r => `<li>
               <span class="chip flag">${esc(fl.replaceAll("-", " "))}</span> <a href="${esc(r.url)}" target="_blank" rel="noopener">@${esc(r.author)}</a>
               <small>${esc(r.text)}</small></li>`)).join("")}</ul>` : ""}</div>` : ""}
+          ${(u => u ? `<div class="canuse"><h4>Can I use it?</h4><ul>
+            <li>${u.ready === "install" ? `✅ Installers for ${esc(u.platforms.join(", "))} in its releases` : u.ready === "online" ? `🌐 Runs online: <a href="${esc(u.homepage)}" target="_blank" rel="noopener nofollow">${esc(u.homepage.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "📦 Source code only: you'd build it yourself"}${u.homepage && u.ready === "install" ? ` · <a href="${esc(u.homepage)}" target="_blank" rel="noopener nofollow">website</a>` : ""}</li>
+            <li>${u.licensed ? `✅ License: ${esc(e.github.license)}` : "⚠️ No license: by default nobody else may use, copy or change it"}</li>
+            <li>${u.alive === "abandoned" ? `🪦 Looks abandoned: no changes for ${Math.round(u.days)} days${e.github.status === "archived" ? " (archived)" : ""}` : u.alive === "active" ? `✅ Maintained${u.commits ? `: ${u.commits} commits in the last 30 days` : ""}` : `⏸ Quiet lately: last change ${Math.round(u.days)} days ago`}</li>
+          </ul></div>` : "")(usable(e))}
           ${g ? `<div><h4>On GitHub · ${esc(e.repo)}</h4>${e.reception.repo_counted === false ? `<p class="note-small" style="margin-bottom:8px">This repo isn't the poster's own, so its stars and downloads don't count toward the rating.</p>` : ""}<div class="figures">${fig(num(g.stars), "stars")}${fig(num(g.forks), "forks")}${fig(num(g.downloads), "downloads")}${growth != null ? fig((growth >= 0 ? "+" : "") + num(growth), "stars a day") : ""}${fig(esc(g.license || "none"), "license")}</div>
             ${g.status === "archived" ? '<p class="note-small">This repo is archived.</p>' : ""}</div>`
             : `<p class="note-small">${e.repo ? "The linked repo was removed." : "No GitHub repo linked yet, so it can't be confirmed."}</p>`}
           ${e.reception.reasons.length ? `<div class="chips">${e.reception.reasons.map(r => `<span class="chip">${esc(r)}</span>`).join("")}</div>` : ""}
+          <div class="object"><h4>Tried it?</h4>
+            <p class="note-small">Tell everyone on X whether it works. Each account counts once.${e.trials ? ` So far: <b>✅ ${e.trials.works} works · ❌ ${e.trials.broken} broken</b>.` : ""}</p>
+            <a class="xobject" href="${esc(xIntent(`I tried ${name(e)}${what(e) ? ` (≈ ${what(e)})` : ""} and it works ✅ #FlatteryWorks ${e.code || ""}`, pageUrl(e)))}" target="_blank" rel="noopener">✅ It works</a>
+            <a class="xobject" href="${esc(xIntent(`I tried ${name(e)}${what(e) ? ` (≈ ${what(e)})` : ""} and it's broken ❌ #FlatteryBroken ${e.code || ""}`, pageUrl(e)))}" target="_blank" rel="noopener">❌ It's broken</a></div>
           <div class="object"><h4>Is this listing wrong?</h4>
             <p class="note-small">Post an objection on X with your reason. When six or more established accounts object for real reasons, spread over at least two hours, the listing comes down by itself.${e.objections ? ` <b>⚑ ${e.objections} of 6 counted so far.</b>` : ""}</p>
             <a class="xobject" href="${esc(xIntent(`Please remove "${name(e)}" from Flattery (flattery.sala.company): <your reason> #FlatteryRemove ${e.code || ""}`))}" target="_blank" rel="noopener">⚑ Object on X</a></div>
+          ${e.second_opinion ? `<p class="note-small">🔎 Second opinion (Claude Sonnet): ${e.second_opinion.agree ? "agrees" : "disagrees, so it's shown as Mixed"}. ${esc(e.second_opinion.note)}</p>` : ""}
           <p class="note-small">Score parts: ${Object.entries(e.reception.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}. Crowd opinion, not a legal or technical judgement.</p>
         </div>`;
       if (!sheet.open) sheet.showModal();

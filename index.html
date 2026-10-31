@@ -25,6 +25,8 @@
       <input type="search" class="search" id="search" placeholder="Search clones…" aria-label="Search clones">
     </div>
     <button class="bar-btn dark" id="surprise" type="button" aria-label="Surprise me: open a random loved clone">❤️ <span class="label">Surprise me</span></button>
+    <a class="bar-btn" href="stats/" aria-label="Stats: the clone scene">📊 <span class="label">Stats</span></a>
+    <button class="bar-btn" id="news-btn" type="button" aria-label="This week in clones" hidden>📰 <span class="label">Newsletter</span></button>
     <button class="bar-btn" id="theme-btn" type="button" aria-label="Colour theme: automatic">◐ Auto</button>
   </div>
 </header>
@@ -34,7 +36,7 @@
 
   <section class="about">
     <h2>How the ratings work</h2>
-    <p>Every eight hours Flattery searches X for posts announcing a clone, a reverse-engineered or a reimagined version of existing software, follows builders whose projects did well, and looks up the posts that link each known repo. Claude Haiku keeps only real announcements, then reads the replies and quote posts for their tone and for red flags such as scams, stolen code or projects that don't work. GitHub stars and downloads count only for the poster's own repo.</p>
+    <p>Every eight hours Flattery searches X, Hacker News and Reddit for posts announcing a clone, a reverse-engineered or a reimagined version of existing software, follows builders whose projects did well, and looks up the posts that link each known repo. Claude Haiku keeps only real announcements, then reads the replies and quote posts for their tone and for red flags such as scams, stolen code or projects that don't work. GitHub stars and downloads count only for the poster's own repo.</p>
     <p><b>❤️ Loved</b>: real use on GitHub and a real crowd on X, mostly positive. <b>⭐ Proven on GitHub</b>: lots of stars or downloads, but quiet on X so far.
       <b>🔥 Hyped, unproven</b>: popular on X with no repo, or one nobody uses yet. <b>😐 Mixed</b>: people are split. <b>🆕 New &amp; untested</b>: too new or too small to judge.
       <b>☠️ Don't touch</b>: mostly negative replies, a pile-on, a removed repo, or a serious red flag raised by at least two different accounts, quoted on the card.</p>
@@ -43,7 +45,7 @@
 
   <footer>
     <span><a href="https://flattery.sala.company">flattery.sala.company</a> · a <a href="https://go.sala.company">Sala Company</a> app</span>
-    <span><a href="data/feed.xml">RSS</a> · <a href="data/latest.json">JSON</a> · <a href="data/latest.html">standalone report</a> · <a href="https://github.com/jamalxcode/flattery">Source</a></span>
+    <span><a href="stats/">Stats</a> · <a href="alternatives/">Free alternatives</a> · <a href="data/feed.xml">RSS</a> · <a href="data/latest.json">JSON</a> · <a href="data/latest.html">standalone report</a> · <a href="https://github.com/jamalxcode/flattery">Source</a></span>
   </footer>
 </main>
 <script src="render.js?v=__BUILD__"></script>

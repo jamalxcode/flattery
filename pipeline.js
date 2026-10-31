@@ -16,7 +16,7 @@ import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
 import { buildGroups } from "./groups.js";
 import { SENTIMENT_VERSION, SERIOUS_FLAGS } from "./haiku.js";
-import { TAG, postCode, parseCode, tally } from "./complaints.js";
+import { TAG, postCode, parseCode, tally, WORKS_TAG, BROKEN_TAG, parseTrial, tallyTrials } from "./complaints.js";
 import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
 const CLONE_WORDS = '(clone OR reimplementation OR "reverse engineered" OR "reverse engineer" OR "open source alternative" OR rebuilt OR recreated OR recreation OR "from scratch" OR tribute)';
@@ -35,7 +35,10 @@ const WEEK = 7 * 864e5;
 
 const iso = t => new Date(t).toISOString().replace(/\.\d+Z$/, "Z");
 
-export async function run(prev, opts, { x, haiku, githubStats, githubImage, log, now = Date.now() }) {
+export async function run(prev, opts, { x, haiku, githubStats, githubImage, sources, log, now = Date.now() }) {
+  // Posts from X, or from Hacker News / Reddit (sources.js), whose ids carry a "hn:" or "reddit:" prefix
+  const isX = e => !e.source || e.source === "x";
+  const fromXInfo = k => prev?.info?.source === "x" ? prev.info[k] : undefined;
   const nowIso = iso(now), today = nowIso.slice(0, 10);
   const ageH = e => (now - Date.parse(e.created_at)) / 36e5;
   const outOfTime = () => opts.deadline && Date.now() > opts.deadline;
@@ -46,6 +49,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
   // The latest rejections, shown on the page so wrong ones can be spotted
   const rejectedSamples = fromX ? [...(prev.info.rejected_samples || [])] : [];
   const objections = fromX ? [...(prev.info.objections || [])] : [];
+  const trials = fromX ? [...(prev.info.trials || [])] : [];
   // Whether full-archive search worked last time; a refusal is retried after a week
   let archiveState = fromX ? prev.info.archive : undefined;
   let canArchive = !(archiveState?.ok === false && now - Date.parse(archiveState.checked) < WEEK);
@@ -64,7 +68,11 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
     const due = [...catalog.values()].filter(e => e.status !== "gone" &&
       (ageH(e) < 8 * 24 || (ageH(e) < 30 * 24 && now - Date.parse(e.metrics_at) > 24 * 36e5) || now - Date.parse(e.metrics_at) > WEEK));
     if (due.length) {
-      const { posts, gone } = await x.lookup(due.map(e => e.id));
+      if (sources) {
+        const other = await sources.refresh(due.filter(e => !isX(e)));
+        for (const [id, p] of other) { setMetrics(catalog.get(id), p); counts.refreshed++; }
+      }
+      const { posts, gone } = await x.lookup(due.filter(isX).map(e => e.id));
       for (const p of posts) { setMetrics(catalog.get(p.id), p); counts.refreshed++; }
       for (const id of gone) {
         const e = catalog.get(id);
@@ -163,7 +171,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
     // Watchlist: builders whose projects earned ❤️ or ⭐ (with their own repo) are checked every
     // run, so their next launch is caught on day one. Built from the catalog, nothing to maintain.
     const watchlist = [...new Set((fromX ? prev.groups || [] : [])
-      .filter(g => g.status === "ok" && ["well-received", "proven"].includes(g.reception?.verdict) && g.reception?.repo_counted)
+      .filter(g => g.status === "ok" && isX(g) && ["well-received", "proven"].includes(g.reception?.verdict) && g.reception?.repo_counted)
       .map(g => g.author?.username).filter(Boolean))].slice(0, 40);
     const watchFrom = iso(Math.max(now - WEEK + 36e5, Date.parse(fromX && prev.info.watch_at || 0)));
     for (let i = 0, chunk = []; i <= watchlist.length; i++) {
@@ -199,6 +207,21 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       }
     }
 
+    // "I tried it": #FlatteryWorks / #FlatteryBroken posts from the cards' buttons
+    {
+      const q = `(#${WORKS_TAG} OR #${BROKEN_TAG}) -is:retweet`;
+      const { posts, newest } = await x.search(q, { sinceId: sinceIds[q], max: 100 });
+      if (newest) sinceIds[q] = newest;
+      let added = 0;
+      for (const p of posts) {
+        const t = parseTrial(p.text);
+        if (!t || trials.some(k => k.id === p.id)) continue;
+        trials.push({ id: p.id, ...t, author_id: p.author.id, account_created: p.author.created_at, followers: p.author.followers, at: p.created_at });
+        added++;
+      }
+      if (added) log(`tried it: ${added} new reports`);
+    }
+
     // Repo searches: posts linking a known, starred repo, to find its original announcement
     // and the real discussion, not only the curator post that brought it in. Weekly per repo.
     const repoSearched = { ...(fromX && prev.info.repo_searched) };
@@ -230,6 +253,20 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       log(`repo search ${e.repo}: ${posts.length} posts, ${kept} new candidates`);
     }
     runInfo.repo_searched = repoSearched;
+
+    // Hacker News and Reddit (free, keyless): new posts since the last run, through the same triage
+    if (sources && opts.otherSources !== false) {
+      const since = Math.max(now - 3 * 864e5, Date.parse(fromXInfo("other_at") || 0));
+      const posts = await sources.search(since);
+      let kept = 0;
+      for (const p of posts) {
+        if (catalog.has(p.id) || rejected.has(p.id) || fresh.has(p.id)) continue;
+        fresh.set(p.id, { ...p, found_by: [`${p.source === "hn" ? "Hacker News" : "Reddit"} search`] });
+        kept++;
+      }
+      runInfo.other_at = nowIso;
+      log(`hacker news / reddit: ${posts.length} posts, ${kept} new candidates`);
+    }
     counts.candidates = fresh.size;
 
     // 3. Triage
@@ -248,7 +285,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
         const { is_reply_or_repost, ...post } = p;
         catalog.set(p.id, {
           ...post,
-          url: `https://x.com/${p.author.username || "i"}/status/${p.id}`,
+          url: p.url || `https://x.com/${p.author.username || "i"}/status/${p.id}`,
           status: "ok",
           first_seen: today,
           metrics_at: nowIso,
@@ -303,8 +340,8 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
     const grown = (e, k) => e.metrics.replies + e.metrics.quotes >= k * (e.sentiment.reactions_at_sample || 0) + 3;
     // A serious red flag judged under older, looser rules is re-read once under the current ones
     const recheck = e => e.sentiment?.flags?.some(f => SERIOUS_FLAGS.has(f)) && (e.sentiment.v || 1) < SENTIMENT_VERSION;
-    const needReactions = [...catalog.values()].filter(e => e.status === "ok" && (recheck(e) && (ageH(e) < REPLY_WINDOW_H || canArchive) ||
-      reached(e.metrics) && (ageH(e) < REPLY_WINDOW_H
+    const needReactions = [...catalog.values()].filter(e => e.status === "ok" && (recheck(e) && (ageH(e) < REPLY_WINDOW_H || canArchive || !isX(e)) ||
+      reached(e.metrics) && (ageH(e) < REPLY_WINDOW_H || !isX(e)
         ? !e.sentiment || (now - Date.parse(e.sentiment.at) > 24 * 36e5 && grown(e, 1.3))
         : canArchive && (!e.sentiment || (now - Date.parse(e.sentiment.at) > WEEK && grown(e, 1.1))))))
       // Re-checks of serious flags first, then unread, then the ones with real GitHub use
@@ -312,6 +349,13 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       .slice(0, opts.maxReactions ?? 10);
     for (const e of needReactions) {
       if (outOfTime()) break;
+      // Hacker News and Reddit comments come straight from their own APIs
+      if (!isX(e)) {
+        if (!sources) continue;
+        const s = await haiku.sentiment(e, await sources.comments(e, opts.repliesPerPost ?? 50));
+        if (s) { e.sentiment = { ...s, at: nowIso, reactions_at_sample: e.metrics.replies }; counts.reactions++; }
+        continue;
+      }
       const old = ageH(e) >= REPLY_WINDOW_H;
       if (old && !canArchive) continue;
       let replies;
@@ -462,6 +506,43 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
     groups = build();
     for (const g of groups) Object.assign(g, keep.get(g.id) || { code: postCode(g.posts[0].id), objections: 0 });
   }
+  // People who tried it: counted per card, and they nudge the rating
+  const tried = tallyTrials(trials);
+  for (const g of groups) {
+    const codes = new Set(g.posts.map(p => postCode(p.id)));
+    const t = [...tried].filter(([c]) => codes.has(c)).reduce((s, [, v]) => ({ works: s.works + v.works, broken: s.broken + v.broken }), { works: 0, broken: 0 });
+    if (!t.works && !t.broken) continue;
+    g.trials = t;
+    g.reception = score(g, now);
+    const h = g.history;
+    if (h.at(-1)?.at === today) h[h.length - 1] = { at: today, verdict: g.reception.verdict, score: g.reception.score };
+    else if (h.at(-1)?.verdict !== g.reception.verdict) h.push({ at: today, verdict: g.reception.verdict, score: g.reception.score });
+  }
+  // Second opinion: a stronger model reviews each Loved and Don't touch verdict once (cached per
+  // project and verdict). When it disagrees with good reason, the card shows Mixed with its note.
+  const opinions = fromX ? { ...(prev.info.second_opinions || {}) } : {};
+  const strong = g => ["well-received", "stay-away"].includes(g.reception.verdict);
+  const facts = g => ({ id: g.id, name: g.project || g.display_name || g.repo, rating: g.reception.verdict === "stay-away" ? "Don't touch" : "Loved",
+    clone_of: g.original_clean || g.original, summary: g.summary, score: g.reception.score, likes: g.metrics.likes, reposts: g.metrics.reposts,
+    replies: g.metrics.replies, posts: g.posts?.length, github: g.reception.repo_counted ? { stars: g.github?.stars, downloads: g.github?.downloads, status: g.github?.status } : null,
+    reply_tone: g.sentiment ? { positive: g.sentiment.positive, neutral: g.sentiment.neutral, negative: g.sentiment.negative, summary: g.sentiment.summary } : null,
+    red_flags: g.sentiment?.evidence || {}, reasons: g.reception.reasons });
+  const toReview = groups.filter(g => g.status === "ok" && strong(g) && !opinions[`${g.id}|${g.reception.verdict}`]).slice(0, opts.maxReviews ?? 15);
+  if (toReview.length && haiku.review) {
+    const r = await haiku.review(toReview.map(facts));
+    for (const g of toReview) if (r.get(g.id)) opinions[`${g.id}|${g.reception.verdict}`] = { ...r.get(g.id), at: today };
+    log(`second opinion: ${r.size} reviewed, ${[...r.values()].filter(v => !v.agree).length} disagreed`);
+  }
+  for (const g of groups) {
+    const o = strong(g) && opinions[`${g.id}|${g.reception.verdict}`];
+    if (!o) continue;
+    g.second_opinion = o;
+    if (!o.agree) {
+      g.reception = { ...g.reception, verdict: "mixed", overruled: true, reasons: [...g.reception.reasons, `second opinion: ${o.note}`] };
+      if (g.history.at(-1)?.at === today) g.history[g.history.length - 1] = { at: today, verdict: "mixed", score: g.reception.score };
+    }
+  }
+
   counts.changed = groups.filter(g => g.history.length > 1 && g.history.at(-1).at === today).length;
   if (counts.changed) log(`ratings: ${counts.changed} projects changed`);
   log(`groups: ${results.length} posts about ${groups.length} projects`);
@@ -476,8 +557,11 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       rejected_samples: rejectedSamples.slice(-60),
       repo_searched: runInfo.repo_searched || (fromX ? prev.info.repo_searched : undefined),
       watchlist: runInfo.watchlist || (fromX ? prev.info.watchlist : undefined),
-      watch_at: runInfo.watch_at || (fromX ? prev.info.watch_at : undefined),
+      watch_at: runInfo.watch_at || fromXInfo("watch_at"),
+      other_at: runInfo.other_at || fromXInfo("other_at"),
       objections: objections.slice(-3000),
+      trials: trials.slice(-5000),
+      second_opinions: opinions,
       removed_ids: [...removedIds],
       removed_projects: removedProjects,
       newsletter: await newsletter(),

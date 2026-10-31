@@ -115,6 +115,10 @@ export function score(entry, now = Date.now()) {
   // is disputed rather than decisive: the card shows both sides as Mixed
   const disputed = serious.length > 0 && strong && net != null && net >= 0.2;
   if (serious.length && !disputed) total -= 30;
+  // People who tried it (#FlatteryWorks / #FlatteryBroken on X)
+  const tr = entry.trials;
+  if (tr?.works >= 3 && tr.works >= 2 * tr.broken) { total += 5; reasons.push(`${tr.works} people say it works`); }
+  if (tr?.broken >= 3 && tr.broken > tr.works) { total -= 12; reasons.push(`${tr.broken} people say it's broken`); }
   if (linked?.status === "archived") reasons.push("repo archived");
   if (linked && !gh) reasons.push(`links to someone else's repo (${entry.repo}), so its ${linked.stars.toLocaleString("en")} stars don't count`);
   if (entry.github?.status === "gone") reasons.push("linked repo removed");

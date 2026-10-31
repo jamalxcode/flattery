@@ -41,6 +41,20 @@ The catalog is saved to the `data` branch (`latest.json`, one commit per run) an
 
 **Project pages and share images:** each deploy writes a page per project at `p/<code>/` (the full app with that project open, its own title, description and preview image), plus `sitemap.xml` and `robots.txt` (`tools/pages.mjs`). Share and Copy link buttons use these pages, so a link shared on X shows that project. The preview images (`data/og/<code>.png`, 1200×630, with the name, rating, score, likes, stars and README screenshot) are drawn by a headless browser in `tools/cards.mjs`, kept on the `data` branch and redrawn only when what they show changes.
 
+**Can I use it?** Each card says whether the poster's own repo has installers (Mac, Windows, Linux, Android, iOS, read from release file names), runs online (its homepage), or is source only; warns when there's no license; and marks it 🪦 abandoned after 30 days without changes (or archived). A filter narrows the list to ready-to-install, online, licensed or maintained projects.
+
+**Free alternatives to X:** `alternatives/<app>/` for every app with 2+ clones (or a well-known product), and an `alternatives/` index: the app filtered to that app's clones, with its own title for search engines.
+
+**Stats:** `stats/` (`tools/stats.mjs`): most-cloned companies and apps, clones per week, ratings by category, fastest-growing repos, the share abandoned, and builders with their projects, stars and hit rate.
+
+**I tried it:** ✅ It works / ❌ It's broken on each card open an X post with `#FlatteryWorks` or `#FlatteryBroken` and the card's code. One vote per established account (30+ days, 10+ followers); 3+ works (and twice the broken) adds a little to the score, 3+ broken (more than works) takes some off.
+
+**Second opinion:** every ❤️ Loved and ☠️ Don't touch verdict is reviewed once by Claude Sonnet from the numbers and the quoted replies; when it disagrees, the card shows 😐 Mixed with its note.
+
+**Hacker News and Reddit:** besides X, each run searches Hacker News (Algolia's free API) and Reddit (public JSON, which often refuses cloud servers; then it's skipped) for clone announcements. They go through the same triage, their comments are read for tone, and they merge with X posts about the same project.
+
+**Newsletter:** the latest issue opens in a drawer (📰 in the top bar, or the line under the headline), so it never pushes the cards down.
+
 **Status and budget:** the page's *Status* section shows the last scan, scans in the last 7 days, and X reads this month. Once a month's reads pass `X_MONTHLY_READS` (repo variable, default 60,000), scans stop reading X until the month turns; GitHub checks and scoring carry on. Set `X_COST_PER_READ` (e.g. `0.005`) to log each run's estimated X cost in `latest.json` (`info.run.x_cost_usd`).
 
 **Backfill:** **Actions → Scan and deploy → Run workflow** with `backfill_days` (e.g. 21) and a higher `max_reads` (e.g. 3000) searches X's full archive for popular clones from those days. Reactions on threads older than 7 days are also re-read weekly through the archive when they've grown.
