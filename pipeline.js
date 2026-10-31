@@ -15,6 +15,7 @@
 import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
 import { buildGroups } from "./groups.js";
+import { SENTIMENT_VERSION, SERIOUS_FLAGS } from "./haiku.js";
 import { TAG, postCode, parseCode, tally } from "./complaints.js";
 import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
@@ -300,11 +301,14 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
     // through full-archive search, so ratings can still change. Unread posts go first.
     const priority = e => (e.reception?.repo_counted ? 1000 * Math.log10(1 + (e.github?.stars || 0)) : 0) + e.metrics.likes;
     const grown = (e, k) => e.metrics.replies + e.metrics.quotes >= k * (e.sentiment.reactions_at_sample || 0) + 3;
-    const needReactions = [...catalog.values()].filter(e => e.status === "ok" && reached(e.metrics) && (ageH(e) < REPLY_WINDOW_H
-      ? !e.sentiment || (now - Date.parse(e.sentiment.at) > 24 * 36e5 && grown(e, 1.3))
-      : canArchive && (!e.sentiment || (now - Date.parse(e.sentiment.at) > WEEK && grown(e, 1.1)))))
-      // Unread first; then the ones with real GitHub use, where the replies matter most
-      .sort((a, b) => (!b.sentiment - !a.sentiment) || priority(b) - priority(a))
+    // A serious red flag judged under older, looser rules is re-read once under the current ones
+    const recheck = e => e.sentiment?.flags?.some(f => SERIOUS_FLAGS.has(f)) && (e.sentiment.v || 1) < SENTIMENT_VERSION;
+    const needReactions = [...catalog.values()].filter(e => e.status === "ok" && (recheck(e) && (ageH(e) < REPLY_WINDOW_H || canArchive) ||
+      reached(e.metrics) && (ageH(e) < REPLY_WINDOW_H
+        ? !e.sentiment || (now - Date.parse(e.sentiment.at) > 24 * 36e5 && grown(e, 1.3))
+        : canArchive && (!e.sentiment || (now - Date.parse(e.sentiment.at) > WEEK && grown(e, 1.1))))))
+      // Re-checks of serious flags first, then unread, then the ones with real GitHub use
+      .sort((a, b) => (recheck(b) - recheck(a)) || (!b.sentiment - !a.sentiment) || priority(b) - priority(a))
       .slice(0, opts.maxReactions ?? 10);
     for (const e of needReactions) {
       if (outOfTime()) break;
