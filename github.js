@@ -163,6 +163,19 @@ export function pickReadmeLogo(md, repo) {
   return null;
 }
 
+// The README's text (for comparing a clone with the original): a string, "" when there's
+// none, or undefined when it couldn't be fetched
+export async function readmeText(repo) {
+  for (const name of ["README.md", "readme.md", "Readme.md", "README.MD"]) {
+    try {
+      const res = await fetch(`https://raw.githubusercontent.com/${repo}/HEAD/${name}`, { signal: AbortSignal.timeout(15000) });
+      if (res.ok) return (await res.text()).replace(/<[^>]+>/g, " ").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\n{3,}/g, "\n\n");
+      if (res.status !== 404) return undefined;
+    } catch { return undefined; }
+  }
+  return "";
+}
+
 // raw.githubusercontent.com isn't API rate limited. Returns { image, logo } (each null when the
 // README has none), or undefined when the README couldn't be fetched (try again later).
 export async function readmeImage(repo) {

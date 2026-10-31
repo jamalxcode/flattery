@@ -6,7 +6,7 @@
 
 const API = "https://api.x.com/2";
 const POST_FIELDS = "created_at,public_metrics,conversation_id,entities,lang,author_id,referenced_tweets";
-const USER_FIELDS = "username,name,public_metrics,verified,created_at";
+const USER_FIELDS = "username,name,public_metrics,verified,created_at,profile_image_url";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -139,7 +139,8 @@ function normalise(p, users) {
     text: (p.text || "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"), // X sends these escaped
     created_at: p.created_at,
     lang: p.lang,
-    author: { id: p.author_id, username: u.username || "", name: u.name || "", followers: u.public_metrics?.followers_count || 0, verified: !!u.verified, created_at: u.created_at || "" },
+    author: { id: p.author_id, username: u.username || "", name: u.name || "", followers: u.public_metrics?.followers_count || 0, verified: !!u.verified, created_at: u.created_at || "",
+      avatar: /^https:\/\/pbs\.twimg\.com\//.test(u.profile_image_url || "") ? u.profile_image_url.replace(/_normal(\.\w+)$/, "_200x200$1") : "" },
     metrics: { likes: m.like_count || 0, reposts: m.retweet_count || 0, replies: m.reply_count || 0, quotes: m.quote_count || 0, bookmarks: m.bookmark_count || 0, views: m.impression_count || 0 },
     urls,
     repos: [...new Set(urls.map(githubRepo).filter(Boolean))],
