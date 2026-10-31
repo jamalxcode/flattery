@@ -39,7 +39,7 @@ on:
         description: "Most X posts to read in this run (X bills per post)"
         default: "1000"
 # contents: write saves the catalog to the data branch
-permissions: { contents: write, pages: write, id-token: write }
+permissions: { contents: write, pages: write, id-token: write, actions: write }
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
   deploy:
@@ -108,6 +108,13 @@ jobs:
           sudo apt-get install -y -qq fonts-noto-color-emoji >/dev/null 2>&1 || true
           npx playwright install --with-deps chromium >/dev/null
           node tools/cards.mjs --data data/latest.json
+      # GitHub switches off scheduled workflows in a repo with no new commits for 60 days.
+      # Re-enabling this workflow on every run keeps the 8-hourly scans going with nobody
+      # touching the code (the same approach as the common "keepalive" actions).
+      - name: Keep the schedule switched on
+        continue-on-error: true
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/pages.yml/enable" && echo "schedule kept on"
       - name: Save the catalog to the data branch
         if: steps.scan.outputs.ok == 'true'
         run: |
