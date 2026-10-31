@@ -105,7 +105,12 @@ The Actions token (`github.token`) covers the GitHub checks. Without the secrets
 
 **Domain:** flattery.sala.company (`CNAME`; DNS: CNAME `flattery` → `jamalxcode.github.io`).
 
-**Timer:** GitHub's own schedule runs late and sometimes not at all, so, as for heat, a cron-job.org job can start the workflow through GitHub's API (`POST /repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches`, fine-grained token with *Actions: read and write*). Set it to every 8 hours. To run a scan by hand: **Actions → Scan and deploy → Run workflow**.
+**Timers (as for heat.sala.company):** GitHub's own schedules run late and sometimes not at all, so cron-job.org starts the workflows through GitHub's API, with a fine-grained token limited to this repo (*Actions: read and write*):
+
+- **Scan and deploy**, every 8 hours: `POST https://api.github.com/repos/jamalxcode/flattery/actions/workflows/pages.yml/dispatches`, body `{"ref":"main"}`.
+- **Freshness check**, every hour: the same with `freshness.yml`. It fails, and GitHub emails you, when the live catalog is more than 11 hours old or the site is down. It also cancels a deploy GitHub left stuck, so the scans behind it can run.
+
+GitHub's schedules stay on as a backup. Each scan also re-enables its own schedule, so GitHub never pauses it for inactivity. The token expires; renew it in both cron-job.org jobs before it does. To run a scan by hand: **Actions → Scan and deploy → Run workflow**.
 
 ## Running locally
 
