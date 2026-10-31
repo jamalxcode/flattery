@@ -19,8 +19,11 @@ const mode = list => {
   return [...n].sort((a, b) => b[1] - a[1])[0]?.[0];
 };
 
+// Version numbers and stage words don't make a different project: "Open Duet 2.0" is "Open-Duet"
+const baseName = s => String(s || "").replace(/\b(v(er(sion)?)?\s*)?\d+(\.\d+)*\b/gi, " ").replace(/\b(beta|alpha|preview|release|rc)\b/gi, " ");
+
 export function nameKey(e) {
-  const n = norm(e.project);
+  const n = norm(baseName(e.project || e.display_name));
   if (n.length < 5 || GENERIC.test(n) || n === norm(e.original) || n === norm(e.product?.name)) return null;
   return n;
 }
@@ -36,6 +39,14 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
     .map(e => e.github && e.github.status !== "gone" && e.reception && !e.reception.repo_counted && e.github.stars >= FAMOUS
       ? { ...e, foreign_repo: e.repo, repo: null, github: undefined, repos: [] } : e)
     .filter(e => !e.foreign_repo || nameKey(e) || (e.project && !/\//.test(e.project)));
+  // Curators: accounts that keep posting other people's projects (3+ posts not their own).
+  // Their reach counts at half weight, so one engagement-farming account can't lift a card.
+  const shared = new Map();
+  for (const e of posts) if (!e.author_built_it && !e.reception?.repo_counted) {
+    const who = e.author?.id || e.author?.username;
+    if (who) shared.set(who, (shared.get(who) || 0) + 1);
+  }
+  const weight = e => (shared.get(e.author?.id || e.author?.username) || 0) >= 3 ? 0.5 : 1;
   // Union-find over post ids
   const parent = new Map(posts.map(e => [e.id, e.id]));
   const find = id => { while (parent.get(id) !== id) { parent.set(id, parent.get(parent.get(id))); id = parent.get(id); } return id; };
@@ -49,7 +60,7 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
     const repo = e.repo?.toLowerCase();
     if (repo) {
       link("repo:" + repo, e.id);
-      const rn = norm(repo.split("/")[1]);
+      const rn = norm(baseName(repo.split("/")[1]));
       if (rn.length >= 5 && !GENERIC.test(rn)) link("name:" + rn, e.id);
     }
     const n = nameKey(e);
@@ -85,7 +96,7 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
     if (grown.get(r) < 2 && !e.repo) continue;
     const n = nameKey(e);
     if (n && !index.has(n)) index.set(n, r);
-    const rn = norm(e.repo?.split("/")[1]);
+    const rn = norm(baseName(e.repo?.split("/")[1]));
     if (rn.length >= 5 && !GENERIC.test(rn) && !index.has(rn)) index.set(rn, r);
   }
   for (const e of posts) {
@@ -123,12 +134,12 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
       if (!best.has(who) || e.metrics.likes > best.get(who).metrics.likes) best.set(who, e);
     }
     const counted = [...best.values()];
-    const sum = k => counted.reduce((s, e) => s + (e.metrics[k] || 0), 0);
+    const sum = k => Math.round(counted.reduce((s, e) => s + (e.metrics[k] || 0) * weight(e), 0));
     const sentiments = pool.map(e => e.sentiment).filter(s => s?.sampled);
     const names = new Map();
     for (const e of pool) {
       const to = overrides.attach?.[e.id];
-      const n = e.project || (to && !to.includes("/") ? to : "");
+      const n = e.project || (to && !to.includes("/") ? to : "") || e.display_name;
       if (n) names.set(n, (names.get(n) || 0) + e.metrics.likes + 1);
     }
     const project = [...names].sort((a, b) => b[1] - a[1])[0]?.[0] || lead.project;

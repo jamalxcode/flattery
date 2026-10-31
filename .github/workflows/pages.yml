@@ -63,6 +63,7 @@ jobs:
             git show FETCH_HEAD:latest.json > "$RUNNER_TEMP/prev.json"
             mkdir -p data
             git archive FETCH_HEAD thumbs 2>/dev/null | tar -x -C data || true  # stored thumbnails
+            git archive FETCH_HEAD og 2>/dev/null | tar -x -C data || true      # stored share images
             echo "loaded the catalog from the data branch ($(ls data/thumbs 2>/dev/null | wc -l) thumbnails)"
           elif [ $has -eq 2 ]; then
             # No data branch yet: take the published copy once, while moving over
@@ -93,6 +94,14 @@ jobs:
             echo "::warning::scan failed, republishing the previous catalog"
             [ -s "$RUNNER_TEMP/prev.json" ] && cp "$RUNNER_TEMP/prev.json" data/latest.json
           fi
+      # Share preview images (data/og/*.png), redrawn only when what they show changes
+      - name: Draw share images
+        continue-on-error: true
+        run: |
+          [ -s data/latest.json ] || { echo "no catalog yet"; exit 0; }
+          sudo apt-get install -y -qq fonts-noto-color-emoji >/dev/null 2>&1 || true
+          npx playwright install --with-deps chromium >/dev/null
+          node tools/cards.mjs --data data/latest.json
       - name: Save the catalog to the data branch
         if: steps.scan.outputs.ok == 'true'
         run: |
@@ -101,6 +110,7 @@ jobs:
           else git worktree add -q --orphan -b data "$store"; fi
           cp data/latest.json "$store/latest.json"
           if [ -d data/thumbs ]; then mkdir -p "$store/thumbs" && cp -r data/thumbs/. "$store/thumbs/"; fi
+          if [ -d data/og ]; then mkdir -p "$store/og" && cp -r data/og/. "$store/og/"; fi
           cd "$store"
           git add -A
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
@@ -109,6 +119,8 @@ jobs:
       - run: rm -rf node_modules
       # New file names each deploy, so browsers never keep running an old script
       - run: sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" index.html
+      # A page per project (p/<code>/) with its own title and preview, plus sitemap.xml
+      - run: '[ -s data/latest.json ] && node tools/pages.mjs --data data/latest.json --out . || echo "no catalog, no project pages"' 
       - uses: actions/upload-pages-artifact@v4
         with: { path: . }
       - id: deployment

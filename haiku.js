@@ -95,6 +95,12 @@ const CLASSIFY_SCHEMA = {
     properties: { id: { type: "string" }, original_clean: { type: "string" }, category: { type: "string", enum: CATEGORIES } } } } },
 };
 
+const NAME_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["results"],
+  properties: { results: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "name"],
+    properties: { id: { type: "string" }, name: { type: "string", description: "1 to 4 words, no quotes or emojis" } } } } },
+};
+
 const MATCH_SCHEMA = {
   type: "object", additionalProperties: false, required: ["results"],
   properties: { results: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "project"],
@@ -167,6 +173,19 @@ export class Haiku {
       const content = batch.map(e => `<entry id="${e.id}" original="${(e.original || "").replace(/"/g, "'")}">\n${(e.text || e.summary || "").slice(0, 400)}\n</entry>`).join("\n");
       const res = await this.ask(TRIAGE_SYSTEM + "\nFor each entry give only the original's clean product name and the category.", content, CLASSIFY_SCHEMA);
       for (const r of res?.results || []) if (batch.some(e => e.id === r.id)) out.set(r.id, r);
+    }
+    return out;
+  }
+
+  // Short names for projects whose post gives none: Map id -> name
+  async name(entries) {
+    const out = new Map();
+    for (let i = 0; i < entries.length; i += 30) {
+      const batch = entries.slice(i, i + 30);
+      const content = "Give each project a short name, 1 to 4 words, the way people would call it: the project's own name if the post, a link or the repo gives one; otherwise a short description such as 'Open Discord alternative' or 'Mac cleaner'. No quotes or emojis.\n\n" +
+        batch.map(e => `<entry id="${e.id}" clones="${(e.original_clean || e.original || "").replace(/"/g, "'")}" repo="${e.repo || ""}">\n${(e.text || "").slice(0, 500)}\n${e.summary || ""}\n</entry>`).join("\n");
+      const res = await this.ask(TRIAGE_SYSTEM, content, NAME_SCHEMA);
+      for (const r of res?.results || []) if (batch.some(e => e.id === r.id) && r.name.trim()) out.set(r.id, r.name.trim().slice(0, 40));
     }
     return out;
   }
