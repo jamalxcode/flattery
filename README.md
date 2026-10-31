@@ -23,6 +23,16 @@ The catalog is saved to the `data` branch (`latest.json`, one commit per run) an
 
 **One card per project:** posts about the same project are merged into one entry: they link the same repo, or name the same specific project (a name also joins the repo of the same name, e.g. "PhotoCraft" and `storytold/photocraft`). Generic names like "Discord clone" never merge. A merged card adds up likes, reposts and replies across its posts, uses the poster's own repo if any post links one, and lists every post in its detail sheet.
 
+**Corrections (`overrides.json`):** applied on every scan. `attach` puts a post into a project (by name or `owner/repo`), `repo` gives a post the repo it didn't link, `separate` keeps posts from merging, `hide` leaves posts off the page, and `owned` says whether a repo is the poster's own (`true`) or someone else's (`false`). For example, @echelon's ArtCraft launch post never names ArtCraft, so it's attached by hand.
+
+**Finding the real announcement:** each run also searches X for posts linking up to 5 known starred repos (weekly per repo, 30 days back), so a project's own launch post and discussion turn up, not only the curator post that brought it in.
+
+**Trust:** reply tone from fewer than 15 replies is marked *low confidence*, weighs less, and can't decide a rating on its own. A red flag counts only when two different accounts raise it, and the detail sheet quotes up to three of their replies with links. The page also lists popular posts the filter recently left out, so wrong rejections can be spotted.
+
+**Page:** opens on rated projects (New & untested one tap away), each project has its own link (`#p=…`, with a Copy link button), a *Rising on GitHub* shelf shows the fastest-growing repos, and `data/feed.xml` is an RSS feed of newly rated and promoted projects. README screenshots are copied into `data/thumbs/` (kept on the `data` branch) instead of being loaded from other servers.
+
+**Health and cost:** when a scheduled scan fails, the workflow opens an issue (*Flattery scans are failing*) and closes it once scans work again. Set the repo variable `X_COST_PER_READ` (e.g. `0.005`) to log each run's estimated X cost in `latest.json` (`info.run.x_cost_usd`).
+
 **Backfill:** **Actions → Scan and deploy → Run workflow** with `backfill_days` (e.g. 21) and a higher `max_reads` (e.g. 3000) searches X's full archive for popular clones from those days. Reactions on threads older than 7 days are also re-read weekly through the archive when they've grown.
 
 There is no GitHub discovery: X finds the projects, GitHub only confirms them.

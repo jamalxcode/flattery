@@ -133,6 +133,11 @@ select { height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid 
 .mini i { display: block; height: 100%; }
 .mini .p { background: var(--pos); } .mini .u { background: var(--border-2); } .mini .m { background: var(--neg); }
 
+.low { color: var(--c-hype); }
+.evidence { margin-top: 8px; }
+.evidence small { white-space: normal; }
+.rejected { margin-top: 32px; color: var(--text-muted); }
+.rejected summary { cursor: pointer; font-weight: 700; color: var(--text); margin-bottom: 8px; }
 .empty { text-align: center; color: var(--text-muted); padding: 48px 16px; font-size: 1.05rem; }
 
 /* Detail sheet */

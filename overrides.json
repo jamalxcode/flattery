@@ -1,0 +1,15 @@
+{
+  "_help": "Manual corrections applied on every scan. attach: post id -> project name or owner/repo it belongs to. repo: post id -> owner/repo to use when the post links none. separate: post ids that never merge with anything. hide: post ids left off the page. owned: owner/repo -> true (the poster's own) or false (someone else's).",
+  "attach": {
+    "2106387247234752762": "ArtCraft",
+    "2106991831074460045": "ArtCraft"
+  },
+  "repo": {
+    "2106387247234752762": "storytold/artcraft"
+  },
+  "separate": [],
+  "hide": [],
+  "owned": {
+    "storytold/artcraft": true
+  }
+}
