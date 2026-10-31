@@ -122,6 +122,8 @@ select { height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid 
 .card h3 button::after { content: ''; position: absolute; inset: 0; z-index: 1; }
 .card h3 button:focus-visible { outline: none; }
 .of { font-size: 0.84rem; font-weight: 600; color: var(--accent); }
+.move { font-size: 0.78rem; font-weight: 700; }
+.move.up { color: var(--pos); } .move.down { color: var(--neg); }
 .sum { color: var(--text-muted); font-size: 0.9rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .stats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 0.8rem; color: var(--text-muted); margin-top: auto; padding-top: 6px; }
 .stats .score { font-size: 0.95rem; font-weight: 800; color: var(--rc); }

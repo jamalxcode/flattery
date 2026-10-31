@@ -1,6 +1,7 @@
 // One Flattery run: X finds the posts, Haiku sorts and reads them, GitHub confirms them.
 // Each run builds on the previous catalog, so nothing found is ever dropped:
-//   1. refresh   new metrics for known posts (100 per request); deleted posts are kept,
+//   1. refresh   new metrics for known posts (100 per request): every run in their first
+//                week, daily up to 30 days, then weekly for good; deleted posts are kept,
 //                marked removed, and their text dropped, as X's terms require
 //   2. discover  recent search: generic queries every run, product queries in turn,
 //                each continuing from the newest post it saw last time (since_id)
@@ -23,7 +24,7 @@ export const GENERIC_QUERIES = [
 ];
 const CHECKPOINTS = [["1h", 1], ["24h", 24], ["7d", 168]];
 const REPLY_WINDOW_H = 6.5 * 24; // recent search only reaches 7 days back
-const ARCHIVE_WINDOW_H = 30 * 24; // with full-archive search, older threads can be read too
+const WEEK = 7 * 864e5;
 
 const iso = t => new Date(t).toISOString().replace(/\.\d+Z$/, "Z");
 
@@ -35,6 +36,9 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
   const catalog = new Map(fromX ? prev.results.map(e => [e.id, e]) : []);
   const sinceIds = { ...(fromX && prev.info.since_ids) };
   const rejected = new Set(fromX ? prev.info.rejected || [] : []);
+  // Whether full-archive search worked last time; a refusal is retried after a week
+  let archiveState = fromX ? prev.info.archive : undefined;
+  let canArchive = !(archiveState?.ok === false && now - Date.parse(archiveState.checked) < WEEK);
   const counts = { refreshed: 0, removed: 0, searched: 0, candidates: 0, added: 0, rejected: 0, reactions: 0, repos: 0 };
 
   const setMetrics = (e, p) => {
@@ -47,7 +51,7 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
   try {
     // 1. Refresh
     const due = [...catalog.values()].filter(e => e.status !== "gone" &&
-      (ageH(e) < 8 * 24 || (ageH(e) < 30 * 24 && now - Date.parse(e.metrics_at) > 24 * 36e5)));
+      (ageH(e) < 8 * 24 || (ageH(e) < 30 * 24 && now - Date.parse(e.metrics_at) > 24 * 36e5) || now - Date.parse(e.metrics_at) > WEEK));
     if (due.length) {
       const { posts, gone } = await x.lookup(due.map(e => e.id));
       for (const p of posts) { setMetrics(catalog.get(p.id), p); counts.refreshed++; }
@@ -98,7 +102,8 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
         } catch (err) {
           if (!(err instanceof ArchiveError)) throw err;
           log(`backfill stopped: ${err.message}`, "warn");
-          archive = false;
+          archive = canArchive = false;
+          archiveState = { ok: false, checked: today };
           break;
         }
         counts.searched++;
@@ -142,14 +147,30 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
       log(`triage: ${fresh.size} candidates, ${counts.added} clones, ${counts.rejected} not clones`);
     }
 
-    // 4. Reactions (a backfill reads many more, since it brings in many popular posts at once)
-    const needReactions = [...catalog.values()].filter(e => e.status === "ok" && reached(e.metrics) && ageH(e) < (archive ? ARCHIVE_WINDOW_H : REPLY_WINDOW_H) &&
-      (!e.sentiment || (now - Date.parse(e.sentiment.at) > 24 * 36e5 && e.metrics.replies + e.metrics.quotes >= 1.3 * (e.sentiment.reactions_at_sample || 0) + 5)))
-      .sort((a, b) => b.metrics.likes - a.metrics.likes)
+    // 4. Reactions (a backfill reads many more, since it brings in many popular posts at once).
+    // In a post's first week: when replies have grown. After that, weekly when they've grown,
+    // through full-archive search, so ratings can still change. Unread posts go first.
+    const grown = (e, k) => e.metrics.replies + e.metrics.quotes >= k * (e.sentiment.reactions_at_sample || 0) + 3;
+    const needReactions = [...catalog.values()].filter(e => e.status === "ok" && reached(e.metrics) && (ageH(e) < REPLY_WINDOW_H
+      ? !e.sentiment || (now - Date.parse(e.sentiment.at) > 24 * 36e5 && grown(e, 1.3))
+      : canArchive && (!e.sentiment || (now - Date.parse(e.sentiment.at) > WEEK && grown(e, 1.1)))))
+      .sort((a, b) => (!b.sentiment - !a.sentiment) || b.metrics.likes - a.metrics.likes)
       .slice(0, opts.maxReactions ?? 10);
     for (const e of needReactions) {
       if (outOfTime()) break;
-      const replies = (await x.replies(e, opts.repliesPerPost ?? 50, { archive: ageH(e) >= REPLY_WINDOW_H })).posts;
+      const old = ageH(e) >= REPLY_WINDOW_H;
+      if (old && !canArchive) continue;
+      let replies;
+      try {
+        replies = (await x.replies(e, opts.repliesPerPost ?? 50, { archive: old })).posts;
+        if (old) archiveState = { ok: true, checked: today };
+      } catch (err) {
+        if (!(err instanceof ArchiveError)) throw err;
+        log(`older threads can't be re-read: ${err.message}`, "warn");
+        canArchive = false;
+        archiveState = { ok: false, checked: today };
+        continue;
+      }
       const quotes = e.metrics.quotes ? (await x.quotes(e, opts.quotesPerPost ?? 20)).posts : [];
       // The author's own replies aren't reception, but often carry the repo link
       const own = replies.filter(r => r.author.id === e.author.id);
@@ -191,7 +212,19 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
   }
 
   // 6. Score
-  for (const e of catalog.values()) e.reception = score(e, now);
+  // and keep each change of rating, so the page can show what was promoted or demoted
+  let changed = 0;
+  for (const e of catalog.values()) {
+    e.reception = score(e, now);
+    const h = e.history ||= [];
+    if (h.at(-1)?.verdict !== e.reception.verdict) {
+      if (h.length) changed++;
+      h.push({ at: today, verdict: e.reception.verdict, score: e.reception.score });
+      if (h.length > 20) h.splice(0, h.length - 20);
+    }
+  }
+  counts.changed = changed;
+  if (changed) log(`ratings: ${changed} changed`);
 
   const results = [...catalog.values()].sort((a, b) => b.reception.score - a.reception.score || b.metrics.likes - a.metrics.likes);
   return {
@@ -200,6 +233,7 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
       source: "x",
       since_ids: sinceIds,
       rejected: [...rejected].slice(-5000),
+      archive: archiveState,
       counts,
     },
   };

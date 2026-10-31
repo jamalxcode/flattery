@@ -10,12 +10,16 @@ A catalog of clones, reverse-engineered and reimagined versions of existing soft
 
 A GitHub Action runs `tools/scan.mjs` every 2 hours and publishes the catalog with the site. Each run builds on the previous one, so nothing found is ever dropped (`pipeline.js`):
 
-1. **Refresh** — fresh likes, reposts, replies, quotes, bookmarks and views for known posts (100 per request; posts under 8 days old every run, up to 30 days once a day). Snapshots are kept at 1 hour, 24 hours and 7 days. Deleted posts stay in the catalog marked *removed*, with their text dropped.
+1. **Refresh** — fresh likes, reposts, replies, quotes, bookmarks and views for known posts (100 per request): every run in a post's first week, daily up to 30 days, then weekly for good, so a rating can still change. Snapshots are kept at 1 hour, 24 hours and 7 days. Deleted posts stay in the catalog marked *removed*, with their text dropped.
 2. **Discover** — X recent search (`x.js`). Generic queries every run (`url:github.com` plus clone / reimplementation / reverse engineered / rebuilt…), plus product queries built from `products.js` (Photoshop, Figma, Notion…), six per run in turn, so all ~80 products are searched about once a day. Each query continues from the newest post it saw last time.
 3. **Triage** — Claude Haiku (`haiku.js`) keeps only posts that announce a *clone*, *reverse-engineered*, *reimagined* or *port* of existing software, and names the original. News, opinions and "is there an alternative to…" posts are dropped.
 4. **Reactions** — for posts with some reach (20+ likes or 5+ reposts), up to 50 replies and 20 quote posts are read by Haiku, which labels each one positive, neutral or negative and lists red flags people raise (doesn't work, license/IP concern, scam or malware, just a wrapper, stolen code, overhyped, security issue). The author's own replies don't count, but repo links in them are picked up. Reactions are read again when replies have grown, while X's 7-day search still reaches them.
 5. **Confirm on GitHub** (`github.js`) — stars, forks, release downloads and daily star growth of the linked repo, 50 repos per GraphQL request. Renamed repos are followed; removed ones are marked.
-6. **Score** (`reception.js`) — see below.
+6. **Score** (`reception.js`) — see below. Each change of rating is kept in the post's history; the page marks clones promoted or demoted in the last two weeks and shows a *Just promoted* shelf.
+
+The catalog is saved to the `data` branch (`latest.json`, one commit per run) and every run starts from it. A run never starts from empty while a catalog is saved, and refuses to write one smaller than the last.
+
+**Backfill:** **Actions → Scan and deploy → Run workflow** with `backfill_days` (e.g. 21) and a higher `max_reads` (e.g. 3000) searches X's full archive for popular clones from those days. Reactions on threads older than 7 days are also re-read weekly through the archive when they've grown.
 
 There is no GitHub discovery: X finds the projects, GitHub only confirms them.
 
