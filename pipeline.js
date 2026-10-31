@@ -142,8 +142,10 @@ export async function run(prev, opts, { x, haiku, githubStats, log, now = Date.n
   // 5. Confirm on GitHub
   const linked = [...catalog.values()].filter(e => e.repo && e.status === "ok");
   const names = [...new Set(linked.map(e => e.repo))];
+  // A GitHub failure mustn't lose the X reads already paid for: keep the old stats this run
+  let stats = new Map();
   if (names.length) {
-    const stats = await githubStats(names);
+    try { stats = await githubStats(names); } catch (err) { log(`github check failed: ${err.message}`, "warn"); }
     for (const e of linked) {
       const st = stats.get(e.repo);
       if (!st) continue;

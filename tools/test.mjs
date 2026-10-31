@@ -7,6 +7,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { X, githubRepo } from "../x.js";
 import { run } from "../pipeline.js";
+import { repoStats } from "../github.js";
 import { reportHtml } from "../report.js";
 
 const { values: a } = parseArgs({ options: { html: { type: "string" } } });
@@ -86,6 +87,16 @@ const githubStats = async names => new Map(names.map(n => [n, { status: "ok", re
 
 assert.equal(githubRepo("https://github.com/alice/webshop.git"), "alice/webshop");
 assert.equal(githubRepo("https://github.com/features/copilot"), null);
+
+// GitHub sometimes returns null nodes inside a repo (partial answers); that mustn't crash the scan
+const realFetch = globalThis.fetch;
+globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ data: { r0: {
+  nameWithOwner: "a/b", url: "https://github.com/a/b", isArchived: false, stargazerCount: 7, forkCount: 1, watchers: null,
+  releases: { totalCount: 2, nodes: [null, { releaseAssets: { nodes: [null, { downloadCount: 5 }] } }] } } } }) });
+const partial = (await repoStats("t", ["a/b"], log)).get("a/b");
+assert.equal(partial.downloads, 5);
+assert.equal(partial.stars, 7);
+globalThis.fetch = realFetch;
 
 // Run 1
 const x = new X("token", log, { maxReads: 2000 });
