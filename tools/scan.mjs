@@ -5,6 +5,8 @@
 //
 // --cache is the previously published latest.json; each run builds on it (see pipeline.js).
 // --max-reads caps the X posts read per run, which is what X bills for.
+// --backfill-days N also searches the full archive for the last N days (popular posts
+// only), for catching up; it needs full-archive search on the X plan.
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { X } from "../x.js";
@@ -25,6 +27,8 @@ const { values: a } = parseArgs({
     "budget-sec": { type: "string", default: "0" },
     "max-wait": { type: "string", default: "60" },
     rotate: { type: "boolean", default: false },
+    "backfill-days": { type: "string", default: "0" },
+    "backfill-per-query": { type: "string", default: "200" },
   },
 });
 
@@ -49,6 +53,8 @@ const { results, info: runInfo } = await run(prev, {
   perQuery: +a["per-query"],
   productsPerRun: +a["products-per-run"],
   maxReactions: +a["max-reactions"],
+  backfillDays: +a["backfill-days"],
+  backfillPerQuery: +a["backfill-per-query"],
 }, {
   x, haiku, log,
   githubStats: names => ghToken ? repoStats(ghToken, names, log) : (log("no GITHUB_TOKEN, skipping GitHub checks", "warn"), new Map()),

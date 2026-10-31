@@ -46,6 +46,9 @@ const replyPosts = {
   p3: Array.from({ length: 10 }, (_, i) => post(`r3${i}`, "fan", i < 8 ? "doesn't even start, and it's a wrapper" : "ok", 49, metrics(1, 0, 0, 0, 0))),
 };
 let deleted = new Set();
+let archiveRefused = false;
+// an older popular post only full-archive search can find
+const oldPost = post("p9", "u3", "I reverse engineered the AirDrop protocol, open source", 15 * 24, metrics(3000, 600, 150, 40, 200000), "https://github.com/carol/opendrop");
 
 const reads = [];
 globalThis.fetch = async url => {
@@ -53,11 +56,14 @@ globalThis.fetch = async url => {
   reads.push(u.pathname + "?" + u.searchParams.get("query"));
   const json = body => ({ ok: true, status: 200, json: async () => body, headers: new Headers() });
   const pack = list => json({ data: list, includes: { users: [...new Set(list.map(p => p.author_id))].map(id => users[id]) }, meta: { newest_id: list[0]?.id, result_count: list.length } });
-  if (u.pathname === "/2/tweets/search/recent") {
+  if (u.pathname === "/2/tweets/search/all" && archiveRefused)
+    return { ok: false, status: 403, text: async () => "client-not-enrolled", headers: new Headers() };
+  if (u.pathname === "/2/tweets/search/recent" || u.pathname === "/2/tweets/search/all") {
     const q = u.searchParams.get("query");
     const conv = q.match(/conversation_id:(\w+)/);
     if (conv) return pack(replyPosts[conv[1]] || []);
     if (u.searchParams.get("since_id")) return pack([]);
+    if (u.pathname.endsWith("/all")) return pack([oldPost, posts.p4]);
     return pack(Object.values(posts).filter(p => !deleted.has(p.id)));
   }
   if (/\/quote_tweets$/.test(u.pathname)) return pack([]);
@@ -124,6 +130,21 @@ assert.equal(by(r2, "p3").text, "", "removed posts lose their text");
 assert.equal(by(r2, "p1").github.stars_history.length, 2);
 assert.ok(by(r2, "p1").snapshots["24h"], "24h checkpoint recorded");
 assert.ok(x2.reads < firstReads, "known posts aren't searched again");
+
+// Backfill: full-archive search adds the older popular post (the tiny p4 is skipped)
+posts.p9 = oldPost;
+const x3 = new X("token", log, { maxReads: 3000 });
+const r3 = await run(r2, { perQuery: 50, productsPerRun: 1, backfillDays: 21, maxReactions: 40 }, { x: x3, haiku, githubStats, log, now: T0 + 48 * H });
+assert.ok(by(r3, "p9"), "backfill finds the older post");
+assert.ok(by(r3, "p9").found_by.some(f => f.startsWith("backfill")));
+assert.ok(reads.some(r => r.startsWith("/2/tweets/search/all?conversation_id:p9")), "old threads are read through the archive");
+
+// Without full-archive access the run carries on
+archiveRefused = true;
+delete posts.p9;
+const x4 = new X("token", log, { maxReads: 3000 });
+const r4 = await run(r1, { perQuery: 50, productsPerRun: 1, backfillDays: 21 }, { x: x4, haiku, githubStats, log, now: T0 + 48 * H });
+assert.equal(r4.results.length, 4);
 
 console.log(`ok: ${r1.results.length} posts, ${firstReads} + ${x2.reads} X reads`);
 for (const e of r2.results) console.log(`  ${String(e.reception.score).padStart(3)} ${e.reception.verdict.padEnd(13)} ${e.id} ${JSON.stringify(e.reception.parts)} ${e.reception.reasons.join("; ")}`);
