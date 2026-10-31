@@ -60,6 +60,12 @@ const { results, info: runInfo } = await run(prev, {
   githubStats: names => ghToken ? repoStats(ghToken, names, log) : (log("no GITHUB_TOKEN, skipping GitHub checks", "warn"), new Map()),
 });
 
+// Nothing found is ever dropped, so a smaller catalog means something went wrong
+if (prev?.info?.source === "x" && results.length < prev.results.length) {
+  console.error(`catalog shrank from ${prev.results.length} to ${results.length} posts; not writing it`);
+  process.exit(1);
+}
+
 const now = new Date();
 const info = {
   ...runInfo,

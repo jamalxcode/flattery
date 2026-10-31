@@ -30,7 +30,7 @@ on:
       max_reads:
         description: "Most X posts to read in this run (X bills per post)"
         default: "600"
-permissions: { contents: read, pages: write, id-token: write }
+permissions: { contents: write, pages: write, id-token: write }  # contents: write saves the catalog to the data branch
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
   deploy:
@@ -44,9 +44,28 @@ jobs:
       - run: npm ci
       - uses: actions/configure-pages@v5
         id: pages
-      - name: Fetch the previous catalog
-        run: curl -fsSL "${{ steps.pages.outputs.base_url }}/data/latest.json" -o "$RUNNER_TEMP/prev.json" || echo "no previous catalog"
+      # The catalog is kept on the `data` branch (one latest.json, a commit per run), so a
+      # Pages hiccup can't wipe it. Never start from empty unless there's truly nothing saved.
+      - name: Load the saved catalog
+        run: |
+          set +e
+          git ls-remote --exit-code origin refs/heads/data >/dev/null; has=$?
+          set -e
+          if [ $has -eq 0 ]; then
+            git fetch -q --depth 1 origin data
+            git show FETCH_HEAD:latest.json > "$RUNNER_TEMP/prev.json"
+            echo "loaded the catalog from the data branch"
+          elif [ $has -eq 2 ]; then
+            # No data branch yet: take the published copy once, while moving over
+            code=$(curl -sS -o "$RUNNER_TEMP/prev.json" -w '%{http_code}' "${{ steps.pages.outputs.base_url }}/data/latest.json" || echo 000)
+            if [ "$code" = 200 ]; then echo "loaded the catalog from the site";
+            elif [ "$code" = 404 ]; then rm -f "$RUNNER_TEMP/prev.json"; echo "no saved catalog anywhere, starting fresh";
+            else echo "::error::couldn't load the saved catalog (HTTP $code); stopping rather than starting from empty"; exit 1; fi
+          else
+            echo "::error::couldn't reach the data branch; stopping rather than starting from empty"; exit 1
+          fi
       - name: Scan X
+        id: scan
         env:
           X_BEARER_TOKEN: "${{ secrets.X_BEARER_TOKEN }}"
           ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}"
@@ -55,10 +74,24 @@ jobs:
           mkdir -p data
           BACKFILL="${{ inputs.backfill_days || '0' }}"
           if [ "$BACKFILL" != "0" ]; then EXTRA="--backfill-days $BACKFILL --max-reactions 40 --budget-sec 900"; else EXTRA="--budget-sec 360"; fi
-          if ! node tools/scan.mjs --max-reads "${{ inputs.max_reads || '600' }}" --rotate $EXTRA --cache "$RUNNER_TEMP/prev.json" --out data; then
+          if node tools/scan.mjs --max-reads "${{ inputs.max_reads || '600' }}" --rotate $EXTRA --cache "$RUNNER_TEMP/prev.json" --out data; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
             echo "::warning::scan failed, republishing the previous catalog"
             [ -s "$RUNNER_TEMP/prev.json" ] && cp "$RUNNER_TEMP/prev.json" data/latest.json
           fi
+      - name: Save the catalog to the data branch
+        if: steps.scan.outputs.ok == 'true'
+        run: |
+          store="$RUNNER_TEMP/store"
+          if git fetch -q --depth 1 origin data 2>/dev/null; then git worktree add -q -B data "$store" FETCH_HEAD
+          else git worktree add -q --orphan -b data "$store"; fi
+          cp data/latest.json "$store/latest.json"
+          cd "$store"
+          git add latest.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Catalog $(date -u +%Y-%m-%dT%H:%MZ)" || { echo "catalog unchanged"; exit 0; }
+          git push -q origin data
       - run: rm -rf node_modules
       - uses: actions/upload-pages-artifact@v3
         with: { path: . }
