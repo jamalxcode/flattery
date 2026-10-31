@@ -13,7 +13,11 @@ import { SERIOUS_FLAGS } from "./haiku.js";
 const log01 = (v, full) => Math.min(1, Math.log10(1 + Math.max(0, v)) / Math.log10(1 + full));
 const round = v => Math.round(v);
 
+// Days after which a post that never got going counts as "didn't catch on"
+export const FADE_DAYS = 14;
+
 export const VERDICTS = {
+  faded: "Didn't catch on",
   "well-received": "Well received",
   proven: "Proven on GitHub",
   unconfirmed: "Buzz, not confirmed on GitHub",
@@ -107,14 +111,18 @@ export function score(entry, now = Date.now()) {
   const flags = s?.flags || [];
   const serious = flags.filter(f => SERIOUS_FLAGS.has(f));
   total -= Math.min(30, 10 * (flags.length - serious.length));
-  if (serious.length) total -= 30;
+  // A serious accusation against a project most people clearly like, with real use on GitHub,
+  // is disputed rather than decisive: the card shows both sides as Mixed
+  const disputed = serious.length > 0 && strong && net != null && net >= 0.2;
+  if (serious.length && !disputed) total -= 30;
   if (linked?.status === "archived") reasons.push("repo archived");
   if (linked && !gh) reasons.push(`links to someone else's repo (${entry.repo}), so its ${linked.stars.toLocaleString("en")} stars don't count`);
   if (entry.github?.status === "gone") reasons.push("linked repo removed");
   total = Math.max(0, Math.min(100, round(total)));
 
   let verdict;
-  if (serious.length) { verdict = "stay-away"; reasons.push(`people on X raised: ${serious.map(f => f.replaceAll("-", " ")).join(", ")}`); }
+  if (disputed) { verdict = "mixed"; reasons.push(`disputed: some people on X raised ${serious.map(f => f.replaceAll("-", " ")).join(", ")}, while most replies are positive`); }
+  else if (serious.length) { verdict = "stay-away"; reasons.push(`people on X raised: ${serious.map(f => f.replaceAll("-", " ")).join(", ")}`); }
   else if (entry.github?.status === "gone") verdict = "stay-away";
   else if ((strong || confirmed) && !reached(m) && (net == null || net > -0.2)) {
     // Real use on GitHub but a quiet post on X: proven, not (yet) loved by a crowd
@@ -125,12 +133,16 @@ export function score(entry, now = Date.now()) {
     verdict = net != null && net <= -0.2 ? "mixed" : "well-received";
     reasons.push(`${gh.stars.toLocaleString("en")} GitHub stars${gh.downloads ? ` and ${gh.downloads.toLocaleString("en")} downloads` : ""}`);
   } else if (confirmed && (net == null || net > -0.2)) verdict = total >= 50 ? "well-received" : "mixed";
-  else if (!reached(m) || (ageH < 24 && !s)) verdict = "too-early";
+  else if (!reached(m) || (ageH < 24 && !s)) {
+    // Two weeks on with little reach and no GitHub use: it didn't catch on (it can still
+    // come back if people pick it up later)
+    verdict = ageH > FADE_DAYS * 24 && !confirmed ? "faded" : "too-early";
+  }
   else if (total < 35 || (net != null && net <= -0.2)) verdict = "stay-away";
   else if (total >= 60 && (net == null || net >= 0.2)) {
     verdict = confirmed ? "well-received" : "unconfirmed";
     if (!confirmed && !(linked && !gh)) reasons.push(gh ? `repo has ${gh.stars} stars and ${gh.downloads} downloads (needs ${CONFIRM.stars} stars or ${CONFIRM.downloads} downloads)` : "no GitHub repo linked");
   } else verdict = "mixed";
 
-  return { score: total, verdict, parts, net: net == null ? null : Math.round(net * 100) / 100, confirmed, repo_counted: !!gh, confidence, reasons };
+  return { score: total, verdict, disputed, parts, net: net == null ? null : Math.round(net * 100) / 100, confirmed, repo_counted: !!gh, confidence, reasons };
 }

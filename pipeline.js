@@ -280,6 +280,13 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       }
       log(`matching: ${unnamed.filter(e => e.matched).length} of ${unnamed.length} unnamed posts matched to a project`);
     }
+    // Short names for the rest that still have none (a repo's own name counts as a name)
+    const nameless = [...catalog.values()].filter(e => e.status === "ok" && !e.project && !e.repo && !e.display_name && !e.named_checked).slice(0, 60);
+    if (nameless.length) {
+      const n = await haiku.name(nameless);
+      for (const e of nameless) { e.named_checked = today; if (n.get(e.id)) e.display_name = n.get(e.id); }
+      log(`naming: ${n.size} of ${nameless.length} unnamed projects named`);
+    }
     // Categories and clean product names for entries from before they existed
     const unclassified = [...catalog.values()].filter(e => !e.category).slice(0, 100);
     if (unclassified.length) {
@@ -406,11 +413,11 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, log,
       return d >= 0.9 && g.reception.repo_counted ? Math.round((h.at(-1).stars - h[0].stars) / d) : 0;
     };
     const live = groups.filter(g => g.status === "ok");
-    const changed = live.filter(g => g.reception.verdict !== "too-early" && g.history?.at(-1)?.at >= since);
+    const changed = live.filter(g => !["too-early", "faded"].includes(g.reception.verdict) && g.history?.at(-1)?.at >= since);
     const rising = live.filter(g => growth(g) >= 5).sort((a, b) => growth(b) - growth(a)).slice(0, 3);
     const pick = [...new Map([...changed.sort((a, b) => b.reception.score - a.reception.score), ...rising].map(g => [g.id, g])).values()].slice(0, 12);
     if (pick.length < 2) return issues;
-    const LABEL = { "well-received": "Loved", proven: "Proven on GitHub", unconfirmed: "Hyped, unproven", mixed: "Mixed", "stay-away": "Don't touch", "too-early": "New & untested" };
+    const LABEL = { faded: "Didn't catch on", "well-received": "Loved", proven: "Proven on GitHub", unconfirmed: "Hyped, unproven", mixed: "Mixed", "stay-away": "Don't touch", "too-early": "New & untested" };
     const items = pick.map(g => ({ id: g.id, name: g.project || g.repo?.split("/")[1] || `${g.original_clean || g.original || "Unnamed"} clone`, verdict: g.reception.verdict,
       rating: LABEL[g.reception.verdict], previous_rating: g.history.length > 1 ? LABEL[g.history.at(-2).verdict] : null, likes: g.metrics.likes, posts: g.posts?.length || 1,
       stars: g.reception.repo_counted ? g.github?.stars : undefined, stars_a_day: growth(g) || undefined,

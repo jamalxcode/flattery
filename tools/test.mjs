@@ -84,6 +84,7 @@ globalThis.fetch = async url => {
 const haiku = {
   async classify(list) { return new Map(list.map(e => [e.id, { category: "Design", original_clean: e.original || "" }])); },
   async match(list) { return new Map(list.map(e => [e.id, ""])); },
+  async name(list) { return new Map(list.map(e => [e.id, "Named " + e.id])); },
   async complaints(list) { return new Map(list.map(c => [c.id, !/spam/.test(c.text)])); },
   async newsletter(facts) { return { title: "Week", intro: "Intro", items: facts.items.slice(0, 2).map(i => ({ id: i.id, blurb: "b" })), outro: "Bye" }; },
   async triage(list) {
@@ -259,6 +260,28 @@ const r8 = await run(r1, { perQuery: 50, productsPerRun: 0, repoSearches: 0 }, {
 assert.ok(r8.groups.some(g => g.posts.some(p => p.id === "p2")), "a burst of objections at the same time doesn't");
 assert.equal(r8.groups.find(g => g.posts.some(p => p.id === "p2")).objections, 2);
 complaintPosts = [];
+
+// Old posts that never got going "didn't catch on"; a serious flag against a loved, starred
+// project is disputed (Mixed), not Don't touch
+assert.equal(score({ ...small, github: undefined, repo: null, created_at: new Date(T0 - 20 * 864e5).toISOString() }, T0).verdict, "faded");
+assert.equal(score({ ...small, github: undefined, repo: null }, T0).verdict, "too-early");
+const loved = { ...small, metrics: { likes: 400, reposts: 60, replies: 30, quotes: 2, bookmarks: 40, views: 40000 },
+  sentiment: { positive: 16, neutral: 2, negative: 2, sampled: 20, flags: ["stolen-code"] } };
+assert.equal(score(loved, T0).verdict, "mixed");
+assert.equal(score(loved, T0).disputed, true);
+assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "stay-away", "without real GitHub use the flag still decides");
+// Version numbers don't split a project: "Open Duet 2.0" and "Open-Duet" are one card
+{
+  const dup = [mkp("d1", "Open Duet 2.0", 200), mkp("d2", "Open-Duet", 30)];
+  for (const e of dup) e.reception = score(e, T0);
+  assert.equal(buildGroups(dup, [], "2026-10-30", T0).length, 1);
+}
+// A curator's reach counts at half weight once they post 3+ projects that aren't theirs
+{
+  const cur = ["x1", "x2", "x3"].map((id, i) => ({ ...mkp(id, "Thing " + i + " app", 100), author: { id: "cur", username: "curator", followers: 10 } }));
+  for (const e of cur) e.reception = score(e, T0);
+  assert.equal(buildGroups(cur, [], "2026-10-30", T0).find(g => g.posts[0].id === "x1").metrics.likes, 50);
+}
 
 console.log(`ok: ${r1.results.length} posts, ${firstReads} + ${x2.reads} X reads`);
 for (const e of r2.results) console.log(`  ${String(e.reception.score).padStart(3)} ${e.reception.verdict.padEnd(13)} ${e.id} ${JSON.stringify(e.reception.parts)} ${e.reception.reasons.join("; ")}`);

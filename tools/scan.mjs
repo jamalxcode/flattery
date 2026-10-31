@@ -136,8 +136,8 @@ await writeFile(`${a.out}/latest.html`, reportHtml({ css, renderJs, noteHtml, re
 // RSS: newly rated and newly promoted projects of the last two weeks
 const site = "https://flattery.sala.company/";
 const xml = s => String(s ?? "").replace(/[<>&'"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]));
-const LABEL = { "well-received": "❤️ Loved", proven: "⭐ Proven on GitHub", unconfirmed: "🔥 Hyped, unproven", mixed: "😐 Mixed", "stay-away": "☠️ Don't touch", "too-early": "🆕 New & untested" };
-const fresh = groups.filter(g => g.status === "ok" && g.reception.verdict !== "too-early" && g.history?.length &&
+const LABEL = { faded: "🌫️ Didn't catch on", "well-received": "❤️ Loved", proven: "⭐ Proven on GitHub", unconfirmed: "🔥 Hyped, unproven", mixed: "😐 Mixed", "stay-away": "☠️ Don't touch", "too-early": "🆕 New & untested" };
+const fresh = groups.filter(g => g.status === "ok" && !["too-early", "faded"].includes(g.reception.verdict) && g.history?.length &&
   Date.now() - Date.parse(g.history.at(-1).at) < 14 * 864e5).sort((p, q) => q.history.at(-1).at.localeCompare(p.history.at(-1).at)).slice(0, 40);
 await writeFile(`${a.out}/feed.xml`, `<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0"><channel><title>Flattery: software clones, rated by the crowd</title><link>${site}</link>

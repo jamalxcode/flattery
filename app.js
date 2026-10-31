@@ -32,9 +32,11 @@ let hashOpened = false;
 function openFromHash() {
   if (location.hash.startsWith("#news")) return document.getElementById("news")?.scrollIntoView();
   const m = location.hash.match(/^#p=(.+)$/);
-  if (!m || hashOpened) return;
+  // A project page (/p/<code>/) names its project in window.FLATTERY_OPEN
+  const id = m ? decodeURIComponent(m[1]) : window.FLATTERY_OPEN;
+  if (!id || hashOpened) return;
   hashOpened = true;
-  $("live").flattery?.open(decodeURIComponent(m[1]));
+  $("live").flattery?.open(id);
 }
 window.addEventListener("hashchange", () => { hashOpened = false; openFromHash(); });
 

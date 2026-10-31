@@ -7,12 +7,13 @@ const RATINGS = [
   ["proven", "⭐", "Proven on GitHub", "Lots of stars or downloads on the poster's own repo, but quiet on X so far.", "proven"],
   ["unconfirmed", "🔥", "Hyped, unproven", "Lots of buzz on X, but no repo or one nobody uses yet.", "hype"],
   ["too-early", "🆕", "New & untested", "Too new or too small to judge yet.", "new"],
+  ["faded", "🌫️", "Didn't catch on", "Two weeks on, with little reach and no real GitHub use. It can still come back.", "faded"],
   ["mixed", "😐", "Mixed", "People are split on it.", "mixed"],
   ["stay-away", "☠️", "Don't touch", "Mostly negative, a pile-on, a removed repo, or red flags like scams or stolen code.", "danger"],
 ];
 
 // Order for promotions and demotions
-const RANK = { "stay-away": 0, "too-early": 1, mixed: 2, unconfirmed: 3, proven: 3.5, "well-received": 4 };
+const RANK = { "stay-away": 0, faded: 0.5, "too-early": 1, mixed: 2, unconfirmed: 3, proven: 3.5, "well-received": 4 };
 const SITE = "https://flattery.sala.company/";
 const CATEGORIES = ["Design", "Office", "Dev tools", "AI", "Media", "Utilities", "Communication", "Business", "Games", "Other"];
 // Approximate yearly list prices (USD) of originals, for "saves about $X a year"
@@ -32,7 +33,10 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const what = e => e.product ? label(e.product) : (e.original_clean || e.original);
   const price = e => PRICES[String(e.original_clean || "").toLowerCase()] || (e.product && PRICES[label(e.product).toLowerCase()]);
   const xIntent = (text, url) => "https://x.com/intent/tweet?text=" + encodeURIComponent(text) + (url ? "&url=" + encodeURIComponent(url) : "");
-  const name = e => e.project || e.repo?.split("/")[1] || what(e) && `${what(e)} clone` || "Untitled";
+  const name = e => e.project || e.display_name || e.repo?.split("/")[1] || what(e) && `${what(e)} clone` || "Untitled";
+  // Each project's own page (static, with its own preview image for sharing)
+  const pageUrl = e => e.code ? `${SITE}p/${e.code}/` : `${SITE}#p=${encodeURIComponent(e.id)}`;
+  const unrated = v => v === "too-early" || v === "faded";
   const OF = { clone: "Clone of", "reverse-engineered": "Reverse-engineered", reimagined: "Reimagined", port: "Port of" };
   const ofLine = e => what(e) ? `${OF[e.kind] || "Clone of"} ${what(e)}` : (e.kind || "clone");
   const hue = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
@@ -88,6 +92,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
         <div class="cats" data-r="cats"></div>
         <div class="filters-row">
           <div class="filters" data-r="filters"></div>
+          <select class="filter-select" data-r="filterSelect" aria-label="Rating"></select>
           <div class="selects">
             ${search ? "" : `<input type="search" class="search" data-r="q" placeholder="Search clones…" aria-label="Search clones" style="padding-left:16px;height:40px;width:200px">`}
             <select data-r="product" aria-label="Clones of"></select>
@@ -111,7 +116,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
     root.dataset.ready = "1";
     root._filter = "rated";
     const rerender = () => renderReport(root, root._data, root._info, opts);
-    root.querySelectorAll("select,[data-r=q]").forEach(el => el.addEventListener("input", rerender));
+    root.querySelectorAll("select:not([data-r=filterSelect]),[data-r=q]").forEach(el => el.addEventListener("input", rerender));
+    root.querySelector("[data-r=filterSelect]").addEventListener("input", ev => { root._filter = ev.target.value; rerender(); });
     // Searching shows the results right away: the grid is far below the search box
     const toResults = () => {
       const apps = root.querySelector("#apps");
@@ -145,7 +151,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
       if (ev.target === sheet || ev.target.closest(".close")) sheet.close();
       const share = ev.target.closest("[data-share]");
       if (share) {
-        const url = location.href.split("#")[0] + "#p=" + encodeURIComponent(share.dataset.share);
+        const url = share.dataset.url || location.href.split("#")[0] + "#p=" + encodeURIComponent(share.dataset.share);
         navigator.clipboard?.writeText(url).then(() => { share.textContent = "Link copied"; }, () => { share.textContent = url; });
       }
     });
@@ -190,9 +196,10 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <span class="meta">${pe} → ${ne} · ${esc(what(e) || e.kind)}</span></button></li>`;
   }).join("");
 
-  const chips = [["rated", "Rated", live.length - by("too-early").length], ["all", "Everything", live.length], ...RATINGS.map(([v, emo, n]) => [v, `${emo} ${n}`, by(v).length])];
+  const chips = [["rated", "Rated", live.filter(e => !unrated(e.reception.verdict)).length], ["all", "Everything", live.length], ...RATINGS.map(([v, emo, n]) => [v, `${emo} ${n}`, by(v).length])];
   const gone = DATA.length - live.length;
   if (gone) chips.push(["gone", "🗑 Removed", gone]);
+  $("filterSelect").innerHTML = chips.map(([v, t, n]) => `<option value="${v}"${root._filter === v ? " selected" : ""}>${t} (${n})</option>`).join("");
   $("filters").innerHTML = chips.map(([v, t, n]) => `<button type="button" class="filter" data-filter="${v}" aria-pressed="${root._filter === v}">${t} <span class="n">${n}</span></button>`).join("");
 
   const counts = new Map();
@@ -210,7 +217,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const q = (search || $("q")).value.trim().toLowerCase();
   // A search looks through every rating, not only the current filter
   const f = q && root._filter === "rated" ? "all" : root._filter;
-  let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? e.reception.verdict !== "too-early" : e.reception.verdict === f))) &&
+  let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? !unrated(e.reception.verdict) : e.reception.verdict === f))) &&
     (!pick || what(e) === pick) && (!root._cat || e.category === root._cat));
   // Every word must appear somewhere in the project: its name, what it clones, its rating,
   // category, repo, summary, posters and posts ("adobe photoshop", "loved word", "rust")
@@ -243,7 +250,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
         ${e.summary ? `<p class="sum">${esc(e.summary)}</p>` : ""}
         <div class="stats"><span class="score">${e.reception.score}</span><span>♥ ${num(e.metrics.likes)}</span>
           ${e.github && e.github.status !== "gone" && e.reception.repo_counted !== false ? `<span>★ ${num(e.github.stars)}</span>${e.github.downloads ? `<span>⬇ ${num(e.github.downloads)}</span>` : ""}` : ""}
-          <span>${e.group ? `${e.posts.length} posts` : `@${esc(e.author.username)}`}</span>${e.objections ? `<span class="obj" title="objections counted">⚑ ${e.objections}</span>` : ""}</div>
+          <span>${e.group ? `${e.posts.length} posts` : `@${esc(e.author.username)}`}</span>${e.objections ? `<span class="obj" title="objections counted">⚑ ${e.objections}</span>` : ""}${e.reception.disputed ? '<span class="obj" title="Some people raised a serious concern, most replies are positive">⚠️ Disputed</span>' : ""}</div>
         ${mini(e.sentiment)}
       </div></article></li>`;
   }).join("") : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
@@ -309,8 +316,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
             ${e.repo && cls !== "danger" ? `<a class="primary" href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener">View on GitHub</a>` : ""}
             <a${e.repo && cls !== "danger" ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener">Open the post on X</a>
             ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow">☠️ Repo (don't run it)</a>` : ""}
-            <a href="#p=${encodeURIComponent(e.id)}" data-share="${esc(e.id)}" onclick="event.preventDefault()">Copy link</a>
-            <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, SITE + "#p=" + encodeURIComponent(e.id)))}" target="_blank" rel="noopener">Share on X</a>
+            <a href="${esc(pageUrl(e))}" data-share="${esc(e.id)}" data-url="${esc(pageUrl(e))}" onclick="event.preventDefault()">Copy link</a>
+            <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, pageUrl(e)))}" target="_blank" rel="noopener">Share on X</a>
           </div>
           ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>@${esc(e.author.username)} · ${num(e.author.followers)} followers · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
           ${e.group ? `<div><h4>${e.posts.length} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
@@ -333,7 +340,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <p class="note-small">Score parts: ${Object.entries(e.reception.parts).map(([k, v]) => `${esc(k)} ${v}`).join(" · ")}. Crowd opinion, not a legal or technical judgement.</p>
         </div>`;
       if (!sheet.open) sheet.showModal();
-      if (location.protocol !== "file:") history.replaceState(null, "", "#p=" + encodeURIComponent(id));
+      if (location.protocol !== "file:" && !window.FLATTERY_OPEN) history.replaceState(null, "", "#p=" + encodeURIComponent(id));
       sheet.scrollTop = 0;
     },
   };

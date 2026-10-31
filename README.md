@@ -39,6 +39,8 @@ The catalog is saved to the `data` branch (`latest.json`, one commit per run) an
 
 **Newsletter:** once a week Haiku writes *This week in clones* from the week's rating changes and rising repos. The latest issue is at the top of the page with the archive below it, and issues are in the RSS feed. Cards and issues have **Share on X** buttons that link back to flattery.sala.company.
 
+**Project pages and share images:** each deploy writes a page per project at `p/<code>/` (the full app with that project open, its own title, description and preview image), plus `sitemap.xml` and `robots.txt` (`tools/pages.mjs`). Share and Copy link buttons use these pages, so a link shared on X shows that project. The preview images (`data/og/<code>.png`, 1200×630, with the name, rating, score, likes, stars and README screenshot) are drawn by a headless browser in `tools/cards.mjs`, kept on the `data` branch and redrawn only when what they show changes.
+
 **Status and budget:** the page's *Status* section shows the last scan, scans in the last 7 days, and X reads this month. Once a month's reads pass `X_MONTHLY_READS` (repo variable, default 60,000), scans stop reading X until the month turns; GitHub checks and scoring carry on. Set `X_COST_PER_READ` (e.g. `0.005`) to log each run's estimated X cost in `latest.json` (`info.run.x_cost_usd`).
 
 **Backfill:** **Actions → Scan and deploy → Run workflow** with `backfill_days` (e.g. 21) and a higher `max_reads` (e.g. 3000) searches X's full archive for popular clones from those days. Reactions on threads older than 7 days are also re-read weekly through the archive when they've grown.
@@ -66,6 +68,9 @@ Penalties: being *ratioed* (more replies and quotes than likes), each red flag, 
 | **😐 Mixed** | in between, or a well-used repo with clearly negative replies |
 | **☠️ Don't touch** | a serious red flag raised by at least two different accounts (scam/malware, stolen code, security issue), a removed repo, or a low score / mostly negative replies without GitHub to back it |
 | **🆕 New & untested** | too little reach, or under 24 hours old with no replies read yet, and no real GitHub use |
+| **🌫️ Didn't catch on** | more than 14 days old with little reach and no real GitHub use (it comes back if people pick it up) |
+
+A serious red flag against a project most people clearly like (15+ replies, mostly positive) with real GitHub use is shown as **⚠️ Disputed** under 😐 Mixed rather than ☠️. Version numbers don't split a project ("Open Duet 2.0" and "Open-Duet" are one card), accounts that keep posting other people's projects (3+) count at half weight, and projects whose post gives no name get a short one from Haiku.
 
 A famous repo (10,000+ stars) that isn't the poster's own never becomes a card's subject: the post keeps its own project name without the repo, or is left off the page. Each account counts once per project.
 
