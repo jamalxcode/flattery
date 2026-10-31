@@ -351,6 +351,14 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   assert.equal(gx.foreign_repo, "torvalds/linux");
 }
 
+// Only real app names count as what a project clones
+{
+  const { realOriginal } = await import("../pipeline.js");
+  for (const ok of ["Adobe Photoshop", "ElevenLabs", "Figma", "OpenAI Sora"]) assert.ok(realOriginal(ok), ok);
+  for (const bad of ["Not specified", "unknown", "N/A", "Reverse engineering tools", "paid TTS services", ""]) assert.ok(!realOriginal(bad), bad);
+  assert.equal(pickReadmeImage("![x](https://skills.sh/b/a/b?style=flat-square) ![s](docs/s.png)", "a/b"), "https://raw.githubusercontent.com/a/b/HEAD/docs/s.png");
+}
+
 // A serious flag judged under older rules is read again, even when replies haven't grown
 {
   const old = JSON.parse(JSON.stringify(r1));
