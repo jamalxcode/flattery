@@ -15,7 +15,7 @@
 import { BudgetError, ArchiveError } from "./x.js";
 import { score, reached } from "./reception.js";
 import { buildGroups } from "./groups.js";
-import { SENTIMENT_VERSION, SERIOUS_FLAGS, REVIEW_VERSION, NAME_VERSION } from "./haiku.js";
+import { SENTIMENT_VERSION, SERIOUS_FLAGS, REVIEW_VERSION, NAME_VERSION, COMPARE_VERSION } from "./haiku.js";
 import { TAG, postCode, parseCode, tally, WORKS_TAG, BROKEN_TAG, parseTrial, tallyTrials, ADD_TAG, parseAdd } from "./complaints.js";
 import { detectProduct, matchProduct, PRODUCT_QUERIES, PRODUCT_GROUP_QUERIES } from "./products.js";
 
@@ -35,7 +35,7 @@ const WEEK = 7 * 864e5;
 
 const iso = t => new Date(t).toISOString().replace(/\.\d+Z$/, "Z");
 
-export async function run(prev, opts, { x, haiku, githubStats, githubImage, sources, log, now = Date.now() }) {
+export async function run(prev, opts, { x, haiku, githubStats, githubImage, githubReadme, sources, log, now = Date.now() }) {
   // Posts from X, or from Hacker News / Reddit (sources.js), whose ids carry a "hn:" or "reddit:" prefix
   const isX = e => !e.source || e.source === "x";
   const fromXInfo = k => prev?.info?.source === "x" ? prev.info[k] : undefined;
@@ -384,7 +384,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
     // A serious red flag judged under older, looser rules is re-read once under the current ones
     const recheck = e => e.sentiment?.flags?.some(f => SERIOUS_FLAGS.has(f)) && (e.sentiment.v || 1) < SENTIMENT_VERSION;
     const needReactions = [...catalog.values()].filter(e => e.status === "ok" && (recheck(e) && (ageH(e) < REPLY_WINDOW_H || canArchive || !isX(e)) ||
-      reached(e.metrics) && (ageH(e) < REPLY_WINDOW_H || !isX(e)
+      (reached(e.metrics) || e.metrics.replies + e.metrics.quotes >= 3) && (ageH(e) < REPLY_WINDOW_H || !isX(e)
         ? !e.sentiment || (now - Date.parse(e.sentiment.at) > 24 * 36e5 && grown(e, 1.3))
         : canArchive && (!e.sentiment || (now - Date.parse(e.sentiment.at) > WEEK && grown(e, 1.1))))))
       // Re-checks of serious flags first, then unread, then the ones with real GitHub use
@@ -602,6 +602,47 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
   if (counts.hidden) log(`hidden: ${counts.hidden} projects still tiny, unnoticed, or with no name and no original`);
   groups = shown;
 
+  // Steady ratings: a new rating shows once it has held for two scans in a row, so a score
+  // hovering at a threshold doesn't flip the card back and forth. Shown at once: Don't touch
+  // (safety first), a jump of 20+ points, and brand-new cards.
+  const prevById = new Map((fromX ? prev.groups || [] : []).map(g => [g.id, g]));
+  let held = 0;
+  for (const g of groups) {
+    const before = prevById.get(g.id);
+    const shown = before?.reception?.verdict, next = g.reception.verdict;
+    if (!before || !shown || shown === next) { delete g.pending; continue; }
+    const big = next === "stay-away" || Math.abs(g.reception.score - (before.reception.score ?? 0)) >= 20;
+    if (big || before.pending?.verdict === next) { delete g.pending; continue; }
+    // Hold the old rating this scan; the new one shows next scan if it's still the same
+    g.pending = { verdict: next, at: today };
+    g.reception = { ...g.reception, verdict: shown, held: next };
+    const h = g.history;
+    if (h.at(-1)?.at === today && h.at(-1).verdict === next) h.pop();
+    if (h.at(-1)?.verdict !== shown) h.push({ at: today, verdict: shown, score: g.reception.score });
+    held++;
+  }
+  if (held) log(`steady ratings: ${held} changes wait for the next scan to confirm them`);
+
+  // How each clone compares with the original, from its README and what people said: what it
+  // does, what's missing, whether it opens the original's files. Once per project, redone
+  // monthly; a few per run.
+  const compare = Object.fromEntries(Object.entries(fromX ? prev.info.compare || {} : {}).filter(([, c]) => c.v === COMPARE_VERSION));
+  if (githubReadme && haiku.compare) {
+    const want = groups.filter(g => g.status === "ok" && g.repo && g.reception.verdict !== "stay-away" && !["too-early", "faded"].includes(g.reception.verdict) &&
+      (g.original_clean || g.original || g.product) && (!compare[g.id] || now - Date.parse(compare[g.id].at) > 30 * 864e5))
+      .sort((a, b) => b.reception.score - a.reception.score).slice(0, opts.maxCompares ?? 6);
+    for (const g of want) {
+      if (outOfTime()) break;
+      const readme = await githubReadme(g.repo);
+      if (readme === undefined) continue;
+      const c = await haiku.compare({ id: g.id, name: g.project || g.display_name || g.repo, original: g.product ? `${g.product.vendor} ${g.product.name}` : g.original_clean || g.original,
+        summary: g.summary, readme: (readme || "").slice(0, 8000), said: g.sentiment?.summary || "" });
+      if (c) compare[g.id] = { ...c, at: today, v: COMPARE_VERSION };
+    }
+    if (want.length) log(`compare: ${want.filter(g => compare[g.id]?.at === today).length} of ${want.length} projects compared with the original`);
+  }
+  for (const g of groups) if (compare[g.id]) g.compare = compare[g.id];
+
   // Self-check: a card whose posts link a GitHub repo should show a repo. The only accepted
   // reason not to is a famous repo that isn't this project (Linux behind "Ginux"); anything
   // else is a bug, logged every run and shown in the page's Status section.
@@ -639,6 +680,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, sour
       removed_ids: [...removedIds],
       removed_projects: removedProjects,
       audit: audit.slice(0, 50),
+      compare,
       newsletter: await newsletter(),
       counts,
     },

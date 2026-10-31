@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import { parseArgs } from "node:util";
 import { X } from "../x.js";
 import { Haiku } from "../haiku.js";
-import { repoStats, readmeImage } from "../github.js";
+import { repoStats, readmeImage, readmeText } from "../github.js";
 import { run } from "../pipeline.js";
 import { makeSources } from "../sources.js";
 import { reportHtml } from "../report.js";
@@ -80,6 +80,7 @@ const { results, groups, info: runInfo } = await run(prev, {
   x, haiku, log,
   sources: makeSources(log),
   githubImage: readmeImage,
+  githubReadme: readmeText,
   githubStats: names => ghToken ? repoStats(ghToken, names, log) : (log("no GITHUB_TOKEN, skipping GitHub checks", "warn"), new Map()),
 });
 
@@ -115,8 +116,12 @@ const store = async (url, maxBytes) => {
   } catch { return null; }
 };
 const wantThumbs = groups.filter(g => g.github && g.github.status !== "gone" && (g.github.image || g.github.logo || g.github.org_avatar));
+// Projects without a repo logo: the maker's X picture, when the poster built it (never a
+// reposter's face on someone else's project)
+for (const g of groups) if (!wantThumbs.includes(g) && g.author_built_it && g.author?.avatar && g.status === "ok") wantThumbs.push({ ...g, github: {}, _avatarOnly: g });
 for (let i = 0; i < wantThumbs.length; i += 6) {
   await Promise.all(wantThumbs.slice(i, i + 6).map(async g => {
+    if (g._avatarOnly) { const t = await store(g.author.avatar, 3e5); if (t) g._avatarOnly.icon = t; return; }
     if (g.github.image) { const t = await store(g.github.image, 2.5e6); if (t) g.thumb = t; }
     // The row's icon: the README's logo, else the organisation's avatar
     for (const src of [g.github.logo, g.github.org_avatar].filter(Boolean)) {

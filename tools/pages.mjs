@@ -41,6 +41,20 @@ function withMeta(html, { title, description, url, image }) {
   return html;
 }
 
+// Structured data for search engines (schema.org), so results can show the app as a free
+// app with its systems. No star rating is claimed: Flattery's score isn't user reviews.
+const ld = obj => `<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, "\\u003c")}</script>`;
+const OS_NAME = { Mac: "macOS", Windows: "Windows", Linux: "Linux", Android: "Android", iOS: "iOS" };
+const appLd = (g, url) => ({
+  "@context": "https://schema.org", "@type": "SoftwareApplication", name: name(g), url,
+  description: g.summary || undefined,
+  applicationCategory: g.category === "Games" ? "GameApplication" : g.category === "Dev tools" ? "DeveloperApplication" : g.category === "Design" || g.category === "Media" ? "MultimediaApplication" : "BusinessApplication",
+  operatingSystem: [...(g.github?.platforms || []).map(p => OS_NAME[p] || p), ...(g.github?.homepage ? ["Web"] : [])].join(", ") || undefined,
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  sameAs: g.repo ? `https://github.com/${g.repo}` : undefined,
+  image: ogFor(g.code),
+});
+
 const ogFor = code => existsSync(`${a.out}/data/og/${code}.png`) ? `${SITE}data/og/${code}.png` : `${SITE}data/og/home.png`;
 
 // Home page: the shared preview image
@@ -68,9 +82,27 @@ for (const g of live) {
     <p>${num(g.metrics.likes)} likes and ${num(g.metrics.reposts)} reposts on X${g.posts?.length > 1 ? ` across ${g.posts.length} posts` : ""}${stars}.</p>
     <p><a href="${esc(g.url)}">The post on X</a>${g.repo ? ` · <a href="https://github.com/${esc(g.repo)}">${esc(g.repo)} on GitHub</a>` : ""}</p>
   </article></div>`);
+  html = html.replace("</head>", ld(appLd(g, url)) + "\n</head>");
   html = html.replace('<script src="render.js', `<script>window.FLATTERY_OPEN = ${JSON.stringify(g.id).replace(/</g, "\\u003c")};</script>\n<script src="render.js`);
   await mkdir(`${a.out}/p/${g.code}`, { recursive: true });
   await writeFile(`${a.out}/p/${g.code}/index.html`, html);
+}
+
+// A short intro for each alternatives page, written from the data: how many, the best rated,
+// which ones install on which systems or run in the browser
+function intro(app, list) {
+  const best = [...list].sort((x, y) => y.reception.score - x.reception.score);
+  const rated = best.filter(g => !["too-early", "faded"].includes(g.reception.verdict));
+  const loved = best.filter(g => ["well-received", "proven"].includes(g.reception.verdict));
+  const install = best.filter(g => g.github?.platforms?.length);
+  const web = best.filter(g => g.github?.homepage && !g.github?.platforms?.length);
+  const n = list.length;
+  return [
+    `${n} free ${n === 1 ? "clone" : "clones and alternatives"} of ${app} found on X${list.some(g => g.source === "hn") ? " and Hacker News" : ""}, rated by how people reacted and checked on GitHub.`,
+    loved.length ? `Best received: ${loved.slice(0, 3).map(name).join(", ")}.` : rated.length ? `Best rated so far: ${rated.slice(0, 2).map(name).join(", ")}.` : "Most are new, so their ratings are still settling.",
+    install.length ? `Ready to install: ${install.slice(0, 3).map(g => `${name(g)} (${g.github.platforms.join(", ")})`).join("; ")}.` : "",
+    web.length ? `Runs in the browser: ${web.slice(0, 3).map(name).join(", ")}.` : "",
+  ].filter(Boolean).join(" ");
 }
 
 // "Free alternatives to X": a page per original app, the app filtered to its clones
@@ -86,15 +118,17 @@ for (const g of live) {
 for (const [app, list] of byApp) if (list.length < 2 && !list.some(g => g.product)) byApp.delete(app);
 await rm(`${a.out}/alternatives`, { recursive: true, force: true });
 for (const [app, list] of byApp) {
-  const best = [...list].sort((x, y) => y.reception.score - x.reception.score).slice(0, 3).map(name);
   let html = withMeta(index, {
     title: `Free ${app} alternatives, rated by the crowd | Flattery`,
-    description: `${list.length} free ${list.length === 1 ? "clone" : "clones and alternatives"} of ${app}, found on X and checked on GitHub: ${best.join(", ")}. Imitation is the sincerest form of flattery.`,
+    description: intro(app, list).slice(0, 300),
     url: `${SITE}alternatives/${slug(app)}/`, image: `${SITE}data/og/home.png`,
   });
   html = html.replace(/<meta charset="utf-8">/, `<meta charset="utf-8">\n<base href="/">`);
   html = html.replace('<div id="live"></div>', `<div id="live"><article class="static-card"><h1>Free ${esc(app)} alternatives</h1>
+    <p>${esc(intro(app, list))}</p>
     <ul>${list.map(g => `<li><a href="p/${g.code}/">${esc(name(g))}</a>: ${(LABEL[g.reception.verdict] || LABEL.mixed).join(" ")}. ${esc(g.summary || "")}</li>`).join("")}</ul></article></div>`);
+  html = html.replace("</head>", ld({ "@context": "https://schema.org", "@type": "ItemList", name: `Free ${app} alternatives`,
+    itemListElement: [...list].sort((x, y) => y.reception.score - x.reception.score).map((g, i) => ({ "@type": "ListItem", position: i + 1, url: `${SITE}p/${g.code}/`, name: name(g) })) }) + "\n</head>");
   html = html.replace('<script src="render.js', `<script>window.FLATTERY_PRODUCT = ${JSON.stringify(app).replace(/</g, "\\u003c")};</script>\n<script src="render.js`);
   await mkdir(`${a.out}/alternatives/${slug(app)}`, { recursive: true });
   await writeFile(`${a.out}/alternatives/${slug(app)}/index.html`, html);

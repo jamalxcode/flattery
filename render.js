@@ -76,11 +76,16 @@ function renderReport(root, DATA, INFO, opts = {}) {
   })();
   // Get: the installer for this system from the newest release; Open: the project's web app.
   // Never for Don't touch.
+  // Downloads run on the visitor's computer, so they're offered only for rated, established
+  // projects: Loved or Proven, a repo at least two weeks old with 50+ stars. Web apps (Open)
+  // run in the browser and are offered for anything but Don't touch.
+  const trusted = e => ["well-received", "proven"].includes(e.reception?.verdict) && (e.github?.stars || 0) >= 50 &&
+    e.github?.created && Date.now() - Date.parse(e.github.created) >= 14 * 864e5;
   const getLink = e => {
     if (e.reception?.verdict === "stay-away") return null;
     const u = usable(e);
     if (!u) return null;
-    if (OS && e.github.get?.[OS]) return { label: "Get", long: `Get for ${OS}`, url: e.github.get[OS], title: `Download for ${OS} from the project's GitHub releases` };
+    if (OS && e.github.get?.[OS] && trusted(e)) return { label: "Get", long: `Get for ${OS}`, url: e.github.get[OS], title: `Download for ${OS} from the project's GitHub releases` };
     if (u.homepage) return { label: "Open", long: "Open the web app", url: u.homepage, title: "Open it in your browser" };
     return null;
   };
@@ -440,7 +445,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
       sheet.className = `sheet r-${cls}`;
       const get = getLink(e);
       const u = usable(e);
-      const otherGets = u && e.github.get ? Object.entries(e.github.get).filter(([os]) => os !== OS) : [];
+      const otherGets = u && e.github.get && trusted(e) ? Object.entries(e.github.get).filter(([os]) => os !== OS) : [];
       const xFig = `<div class="figures">${fig(num(m.likes), "likes")}${fig(num(m.reposts), "reposts")}${fig(num(m.replies), "replies")}${fig(num(m.quotes), "quotes")}${fig(num(m.bookmarks), "bookmarks")}${m.views ? fig(num(m.views), "views") : ""}</div>`;
       // Laid out like an app store page: picture, name, Get, rating, can I use it, what people
       // said; the evidence behind the rating folds under Details
@@ -458,10 +463,17 @@ function renderReport(root, DATA, INFO, opts = {}) {
             ${cls !== "danger" ? `<a class="xshare fav" href="${esc(xIntent(`❤️ My favourite ${what(e) ? `free take on ${what(e)}` : "clone"}: ${name(e)}${e.summary ? `\n\n${e.summary}` : ""}\n\nRated ${emo} ${rname} by the crowd on Flattery:`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="share-favourite">❤️ Share as my favourite</a>` : ""}
             <a class="xshare" href="${esc(xIntent(`${emo} ${name(e)} is rated "${rname}" on Flattery, the crowd-rated catalog of software clones${what(e) ? ` (≈ ${what(e)})` : ""}.`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="share-x">Share on X</a>
           </div>
+          ${get?.label === "Get" ? `<p class="note-small dl-note">⬇ The file comes straight from the project's GitHub releases. Flattery doesn't check downloads: install only what you trust.</p>` : ""}
           <div class="verdict"><span class="emo">${emo}</span><span><b>${rname}</b><small>${e.repo && g && e.reception.repo_counted === false
             ? `${cls === "hype" ? "Lots of buzz on X. " : ""}Rated on reactions only: its repo (★ ${num(g.stars)}) isn't the poster's own, so GitHub stars don't count toward it.` : rdesc}</small></span>
             <span class="big">${e.reception.score}<small>score</small></span></div>
+          ${e.reception.held ? `<p class="note-small">⏳ Its rating may change to ${rating(e.reception.held)[1]} ${esc(rating(e.reception.held)[2])}: the change shows if it holds at the next scan.</p>` : ""}
           ${e.summary ? `<p>${esc(e.summary)}</p>` : ""}
+          ${(c => c && (c.does.length || c.missing.length) ? `<div class="vs"><h4>Compared with ${esc(what(e))}</h4>
+            ${c.verdict ? `<p>${esc(c.verdict)}</p>` : ""}
+            <div class="vs-cols">${c.does.length ? `<ul class="vs-yes">${c.does.map(d => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
+            ${c.missing.length ? `<ul class="vs-no">${c.missing.map(d => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}</div>
+            <p class="note-small">Opens ${esc(what(e))} files: ${({ yes: "yes", partly: "partly", no: "no", unknown: "not said" })[c.opens_files] || "not said"}${price(e) ? ` · costs nothing, ${esc(what(e))} is about $${price(e)} a year` : ""}. From its README and what people said; may be incomplete.</p></div>` : "")(e.compare)}
           ${s?.flags?.length ? `<div><h4>What people on ${src(e)} raised</h4><div class="chips">${s.flags.map(fl => `<span class="chip flag">${esc(fl.replaceAll("-", " "))}</span>`).join("")}</div>
             ${Object.entries(s.evidence || {}).length ? `<ul class="posts evidence">${Object.entries(s.evidence).flatMap(([fl, list]) => list.map(r => `<li>
               <span class="chip flag">${esc(fl.replaceAll("-", " "))}</span> <a href="${esc(r.url)}" target="_blank" rel="noopener">@${esc(r.author)}</a>

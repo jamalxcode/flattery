@@ -268,6 +268,24 @@ for (const e of lead) e.reception = score(e, T0);
 assert.equal(buildGroups(lead, [], "2026-10-30", T0).length, 1);
 assert.ok(r1.groups.length >= 1 && r1.groups.every(g => g.reception && g.history.length));
 
+// Steady ratings: a small change waits one scan; the same change next scan shows
+{
+  const runAt = (prev, t) => run(JSON.parse(JSON.stringify(prev)), { perQuery: 50, productsPerRun: 0, repoSearches: 0 },
+    { x: new X("token", log, { maxReads: 3000 }), haiku, githubStats, log, now: t });
+  const base = await runAt(r1, T0 + 48 * H);
+  const g0 = base.groups.find(g => !["stay-away"].includes(g.reception.verdict));
+  const fake = JSON.parse(JSON.stringify(base));
+  const fg = fake.groups.find(g => g.id === g0.id);
+  const other = g0.reception.verdict === "mixed" ? "unconfirmed" : "mixed";
+  fg.reception = { ...fg.reception, verdict: other, score: g0.reception.score - 5 };
+  const s1 = await runAt(fake, T0 + 56 * H);
+  const h1 = s1.groups.find(g => g.id === g0.id);
+  assert.equal(h1.reception.verdict, other, "a small change is held for a scan");
+  assert.equal(h1.pending?.verdict, g0.reception.verdict);
+  const s2 = await runAt(s1, T0 + 64 * H);
+  assert.equal(s2.groups.find(g => g.id === g0.id).reception.verdict, g0.reception.verdict, "and shows when it holds");
+}
+
 // The week's newsletter is written from rating changes
 assert.ok(r1.info.newsletter?.length === 1 && r1.info.newsletter[0].items.length === 2, "a newsletter issue is written");
 assert.ok(by(r1, "p1").category, "new entries get a category");

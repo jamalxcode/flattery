@@ -336,3 +336,11 @@ footer a { text-decoration: none; font-weight: 600; }
 @media (max-width: 400px) { .brand { font-size: 0; gap: 0; } }
 @media (max-width: 900px) { .suggest { display: none; } }
 @media (max-width: 640px) { .issue-share { float: none; margin: 0 0 12px; } }
+
+/* Compared with the original */
+.vs p { margin-bottom: 8px; }
+.vs-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 20px; margin-bottom: 6px; }
+.vs-cols ul { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 0.92rem; }
+.vs-yes li::before { content: "✓ "; color: var(--pos); font-weight: 800; }
+.vs-no li::before { content: "✗ "; color: var(--neg); font-weight: 800; }
+.dl-note { margin-top: -6px; }
