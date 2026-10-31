@@ -39,6 +39,16 @@ jobs:
             }
             console.log(`  errors: ${JSON.stringify(errors.filter(e => !/favicon|goatcounter/i.test(e)))}`);
           }
+          // A project page: its own title and preview image, and it opens that project
+          const pg = await b.newPage({ viewport: { width: 1280, height: 900 } });
+          const sitemap = await (await fetch("https://flattery.sala.company/sitemap.xml")).text();
+          const pageUrl = sitemap.match(/<loc>(https:\/\/flattery\.sala\.company\/p\/[^<]+)<\/loc>/)?.[1];
+          await pg.goto(pageUrl, { waitUntil: "networkidle" });
+          await pg.waitForTimeout(800);
+          const og = await pg.evaluate(() => document.querySelector('meta[property="og:image"]')?.content);
+          const img = await fetch(og);
+          console.log(`== project page ${pageUrl}: title "${await pg.title()}", sheet open ${await pg.evaluate(() => document.querySelector(".sheet")?.open)}, og:image ${og} -> ${img.status} ${img.headers.get("content-type")}`);
+          console.log(`== sitemap: ${(sitemap.match(/<loc>/g) || []).length} urls; robots: ${(await (await fetch("https://flattery.sala.company/robots.txt")).text()).trim().replace(/\n/g, " | ")}`);
           await b.close();
           JS
           node check.mjs
