@@ -239,7 +239,8 @@ export class Haiku {
     for (let i = 0; i < entries.length; i += 30) {
       const batch = entries.slice(i, i + 30);
       const content = batch.map(e => `<entry id="${e.id}" original="${(e.original || "").replace(/"/g, "'")}">\n${(e.text || e.summary || "").slice(0, 400)}\n</entry>`).join("\n");
-      const res = await this.ask(TRIAGE_SYSTEM + "\nFor each entry give only the original's clean product name and the category.", content, CLASSIFY_SCHEMA);
+      const res = await this.ask(TRIAGE_SYSTEM + "\nFor each entry give only the original's clean product name and the category. The original must be a specific product or brand people know " +
+        "(e.g. 'Adobe Photoshop', 'uBlock Origin', 'CCleaner'), never a kind of software ('Website', 'Ad blocker', 'Memory optimizer'); leave it empty when the post names no specific product.", content, CLASSIFY_SCHEMA);
       for (const r of res?.results || []) if (batch.some(e => e.id === r.id)) out.set(r.id, r);
     }
     return out;

@@ -135,7 +135,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <p class="side-note" data-r="sideNote" hidden></p>
           <h3 class="side-h" data-r="catsH">Categories</h3>
           <div class="side-group" data-r="cats"></div>
-          <a class="suggest" href="${esc(xIntent("Flattery is missing a clone: <link to the X post or the GitHub repo> #FlatteryAdd", SITE))}" target="_blank" rel="noopener" data-goat="suggest">＋ Suggest a clone on X</a>
+          <a class="suggest" href="https://github.com/jamalxcode/flattery/issues/new?template=suggest.yml" target="_blank" rel="noopener" data-goat="suggest">＋ Suggest a clone</a>
+          <p class="suggest-alt">Paste a link, no X needed. Or post it on X with <a href="${esc(xIntent("Flattery is missing a clone: <link to the X post or the GitHub repo> #FlatteryAdd", SITE))}" target="_blank" rel="noopener" data-goat="suggest-x">#FlatteryAdd</a>.</p>
         </nav>
         <div class="store-main">
           <header class="store-head">

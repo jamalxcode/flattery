@@ -53,11 +53,15 @@ const baseName = s => String(s || "").replace(/\b(v(er(sion)?)?\s*)?\d+(\.\d+)*\
 // project's name match ("Voicebox" and jamiepine/voicebox, "open-notebook" and lfnovo/open-notebook).
 // A project named after the app it clones ("Excel" linking an Excel repo) doesn't count.
 export function repoIsProject(e, gh = e.github) {
-  const repo = norm(baseName(String(gh?.repo || e.repo || "").split("/")[1]));
+  const [rawOwner, rawRepo] = String(gh?.repo || e.repo || "").split("/");
+  const repo = norm(baseName(rawRepo));
+  // The owner can carry the name too: lightpanda-io/browser is Lightpanda's own repo
+  const owner = norm(String(rawOwner || "").replace(/[-_.](io|dev|app|hq|labs?|org|inc|ai|team|official)$/i, ""));
   const original = [e.original_clean, e.original, e.product?.name].map(n => norm(n)).filter(Boolean);
   const names = [e.project, e.display_name].map(n => norm(baseName(n))).filter(n => n.length >= 3 && !original.includes(n));
-  return repo.length >= 3 && !original.includes(repo) &&
-    names.some(n => n === repo || (Math.min(n.length, repo.length) >= 5 && (n.includes(repo) || repo.includes(n))));
+  const matches = r => r.length >= 3 && !original.includes(r) &&
+    names.some(n => n === r || (Math.min(n.length, r.length) >= 5 && (n.includes(r) || r.includes(n))));
+  return matches(repo) || (owner.length >= 5 && names.some(n => n.length >= 5 && n === owner));
 }
 
 export function ownsRepo(entry, gh = entry.github) {

@@ -19,6 +19,7 @@ import { run } from "../pipeline.js";
 import { makeSources } from "../sources.js";
 import { reportHtml } from "../report.js";
 import { makePoster, postsToMake } from "../xpost.js";
+import { makeSuggestions, outcome } from "../suggestions.js";
 
 const root = new URL("../", import.meta.url);
 const { values: a } = parseArgs({
@@ -68,6 +69,10 @@ const established = JSON.parse(await readFile(new URL("../established.json", imp
 const repoTerms = a.repos.split(/[\s,]+/).map(s => s.trim().replace(/^https?:\/\/(www\.)?github\.com\//i, "").replace(/\.git$|\/+$/g, ""))
   .map(s => s.split("/").slice(0, 2).join("/")).filter(s => /^[\w.-]+\/[\w.-]+$/.test(s)).map(r => `url:"github.com/${r}"`);
 if (repoTerms.length) log(`adding repos: ${repoTerms.join(", ")}`);
+// Suggestions from the site's GitHub form
+const suggestions = makeSuggestions(ghToken, process.env.GITHUB_REPOSITORY, log);
+const issues = suggestions ? await suggestions.open() : [];
+if (issues.length) log(`suggestions from the site: ${issues.length} open`);
 const x = new X(xToken, log, { maxReads, maxWait: +a["max-wait"] });
 const haiku = new Haiku(log);
 const { results, groups, info: runInfo } = await run(prev, {
@@ -84,7 +89,8 @@ const { results, groups, info: runInfo } = await run(prev, {
   searchDays: repoTerms.length ? Math.max(+a["search-days"], 180) : +a["search-days"],
   // Established open-source apps (established.json), and repos asked for that may be one
   established: established.apps || [],
-  addRepos: repoTerms.map(t => t.match(/github\.com\/([^"]+)/)[1]),
+  addRepos: [...repoTerms.map(t => t.match(/github\.com\/([^"]+)/)[1]), ...issues.flatMap(i => i.repos)],
+  suggest: { ids: issues.flatMap(i => i.ids), repos: issues.flatMap(i => i.repos) },
   overrides,
 }, {
   x, haiku, log,
@@ -151,6 +157,13 @@ const info = {
   run: { ...runInfo.counts, x_reads: x.reads, ...(costPerRead && { x_cost_usd: Math.round(x.reads * costPerRead * 100) / 100 }), x_calls: x.calls, haiku_calls: haiku.calls, haiku_tokens: haiku.tokens, seconds: Math.round((Date.now() - t0) / 1000) },
 };
 delete info.counts;
+// Reply to each suggestion with what happened, and close it
+for (const i of issues) {
+  const [text, done] = outcome(i, { groups, results, rejected: new Set(runInfo.rejected || []), site: "https://flattery.sala.company/" });
+  await suggestions.reply(i.number, text, done);
+}
+if (issues.length) log(`suggestions from the site: ${issues.length} answered`);
+
 // Posts on X as the Flattery account (only with posting keys): the newsletter and newly loved
 // projects, each once, each linking to the site
 info.posted = { ...(prev?.info?.source === "x" ? prev.info.posted : {}) };

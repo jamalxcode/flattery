@@ -38,10 +38,21 @@ const REPLY_WINDOW_H = 6.5 * 24; // recent search only reaches 7 days back
 const WEEK = 7 * 864e5;
 
 // A real app's name, not a placeholder or a category
+// Words that describe a kind of software, not a product: "Website", "Ad blocker", "Memory Optimizer"
+const GENERIC_WORDS = new Set(("a an the my your free paid open source online web website websites site sites page app apps application applications " +
+  "mobile desktop ad ads blocker blockers memory optimizer optimiser cleaner browser browsers editor editors video photo image images text code note notes " +
+  "music audio player players tool tools launcher launchers manager managers download downloader file files password vpn chat ai assistant agent agents " +
+  "game games os operating system systems calculator calendar email mail client clients server servers social media search engine engines platform platforms " +
+  "service services software program programs utility utilities product products dashboard dashboards tracker trackers generator builder builders " +
+  "maker makers converter viewer reader writer recorder scheduler planner store shop crm erp cms saas api bot bots extension extensions plugin plugins " +
+  "template templates landing ui kit startup startups tv launcher markdown pdf terminal shell keyboard screen screenshot clipboard").split(" "));
 export const realOriginal = s => {
   const t = String(s || "").trim();
-  return t.length >= 2 && !/^(not specified|unspecified|unknown|none|n\/?a|various|multiple|other|generic|tbd|-+)$/i.test(t) &&
-    !/\b(tools?|apps|platforms|services|software|products|programs|utilities|websites|games)$/i.test(t);
+  if (t.length < 2 || /^(not specified|unspecified|unknown|none|n\/?a|various|multiple|other|generic|tbd|-+)$/i.test(t)) return false;
+  if (/\b(tools?|apps|platforms|services|software|products|programs|utilities|websites|games)$/i.test(t)) return false;
+  // Only generic words: a category, not an app
+  const words = t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return !words.length || !words.every(w => GENERIC_WORDS.has(w));
 };
 
 const iso = t => new Date(t).toISOString().replace(/\.\d+Z$/, "Z");
@@ -241,8 +252,8 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
       const { posts, newest } = await x.search(q, { sinceId: sinceIds[q], max: 50 });
       if (newest) sinceIds[q] = newest;
       const ids = new Set();
-      for (const p of posts) {
-        const add = parseAdd(p);
+      // Also suggestions from the site's GitHub form (opts.suggest, read by tools/scan.mjs)
+      for (const add of [...posts.map(parseAdd), opts.suggest || { ids: [], repos: [] }]) {
         for (const id of add.ids) if (!catalog.has(id) && !rejected.has(id) && !fresh.has(id)) ids.add(id);
         for (const r of add.repos) if (![...catalog.values()].some(e => e.repo?.toLowerCase() === r.toLowerCase())) suggestedRepos.push(r);
       }
@@ -386,11 +397,13 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
     }
     // Categories and clean product names for entries from before they existed
     // and once more for those that don't say what they clone
-    const unclassified = [...catalog.values()].filter(e => !e.category || (e.status === "ok" && !e.original_clean && !e.original_checked)).slice(0, 100);
+    const unclassified = [...catalog.values()].filter(e => !e.category || (e.status === "ok" && !e.original_clean && !e.original_checked) ||
+      (e.status === "ok" && !e.product && !realOriginal(e.original_clean) && (e.original_v || 1) < 2)).slice(0, 100);
     if (unclassified.length) {
       const c = await haiku.classify(unclassified);
       for (const e of unclassified) {
         e.original_checked = today;
+        e.original_v = 2;
         const r = c.get(e.id);
         if (r) Object.assign(e, { category: r.category, original_clean: r.original_clean || e.original_clean, product: e.product || matchProduct(r.original_clean) });
       }

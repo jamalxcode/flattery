@@ -44,7 +44,7 @@ on:
         description: "Most X posts to read in this run (X bills per post)"
         default: "1000"
 # contents: write saves the catalog to the data branch
-permissions: { contents: write, pages: write, id-token: write, actions: write }
+permissions: { contents: write, pages: write, id-token: write, actions: write, issues: write }
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
   deploy:
@@ -60,6 +60,11 @@ jobs:
         id: pages
       # The catalog is kept on the `data` branch (one latest.json, a commit per run), so a
       # Pages hiccup can't wipe it. Never start from empty unless there's truly nothing saved.
+      # The label the site's suggestion form uses (created once; a no-op afterwards)
+      - name: Suggestion label
+        continue-on-error: true
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh label create suggestion -R "${{ github.repository }}" --color 4f46e5 --description "Suggested from flattery.sala.company" 2>/dev/null || true
       - name: Load the saved catalog
         run: |
           set +e
