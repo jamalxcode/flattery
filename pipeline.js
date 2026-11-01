@@ -253,6 +253,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
       }
       if (posts.length) log(`suggestions: ${posts.length} posts, ${want.length} linked posts and ${suggestedRepos.length} repos to check`);
     }
+    runInfo.suggested_repos = [...new Set(suggestedRepos)];
     for (const repo of [...new Set(suggestedRepos)].slice(0, opts.maxSuggestions ?? 5)) {
       if (outOfTime()) break;
       // Six months back when full-archive search works, so older projects can be suggested too
@@ -526,7 +527,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
       const d = h.length > 1 ? (Date.parse(h.at(-1).at) - Date.parse(h[0].at)) / 864e5 : 0;
       return d >= 0.9 && g.reception.repo_counted ? Math.round((h.at(-1).stars - h[0].stars) / d) : 0;
     };
-    const live = groups.filter(g => g.status === "ok");
+    const live = groups.filter(g => g.status === "ok" && !g.established);
     const changed = live.filter(g => !["too-early", "faded"].includes(g.reception.verdict) && g.history?.at(-1)?.at >= since);
     const rising = live.filter(g => growth(g) >= 5).sort((a, b) => growth(b) - growth(a)).slice(0, 3);
     const pick = [...new Map([...changed.sort((a, b) => b.reception.score - a.reception.score), ...rising].map(g => [g.id, g])).values()].slice(0, 12);
@@ -627,10 +628,78 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
   if (counts.hidden) log(`hidden: ${counts.hidden} projects still tiny, unnoticed, or not naming an app they clone`);
   groups = shown;
 
+  const prevById = new Map((fromX ? prev.groups || [] : []).map(g => [g.id, g]));
+  // Established open-source apps that replace a paid one (Kdenlive for Premiere Pro, OBS Studio…):
+  // a section of their own, rated on GitHub use, since nobody "launches" them on X any more.
+  // The hand-picked list (established.json) plus repos suggested through #FlatteryAdd or the
+  // workflow's repos box that aren't clones but pass the bar (Haiku names what they replace).
+  const estMeta = { ...(fromX ? prev.info.established_meta || {} : {}) };
+  const estAdded = [...(fromX ? prev.info.established_added || [] : [])];
+  if (githubStats && (opts.established?.length || estAdded.length || opts.addRepos?.length || runInfo.suggested_repos?.length)) {
+    const known = new Set(groups.filter(g => g.repo).map(g => g.repo.toLowerCase()));
+    const listed = () => new Map([...(opts.established || []), ...estAdded].map(a => [a.repo.toLowerCase(), a]));
+    // New candidates: suggested repos that didn't become a clone card
+    const candidates = [...new Set([...(opts.addRepos || []), ...(runInfo.suggested_repos || [])])]
+      .filter(r => !known.has(r.toLowerCase()) && !listed().has(r.toLowerCase()) && !(estMeta[r.toLowerCase()]?.rejected));
+    const all = [...new Set([...listed().values()].map(a => a.repo).concat(candidates))];
+    let st = new Map();
+    try { st = await githubStats(all); } catch (err) { log(`established: github check failed: ${err.message}`, "warn"); }
+    for (const [name, v] of st) if (v.status !== "gone") {
+      const k = name.toLowerCase(), m = estMeta[k] || {};
+      const history = (m.github?.stars_history || []).filter(h => h.at.slice(0, 10) !== today);
+      estMeta[k] = { ...m, github: { ...v, stars_history: [...history, { at: nowIso, stars: v.stars }].slice(-30), image: m.github?.image, logo: m.github?.logo, image_checked: m.github?.image_checked } };
+    }
+    const passes = g => g && g.stars >= 1000 && g.pushed_at && now - Date.parse(g.pushed_at) <= 180 * 864e5;
+    const fresh = candidates.filter(r => passes(estMeta[r.toLowerCase()]?.github) && estMeta[r.toLowerCase()].github.license);
+    if (fresh.length && haiku.establish) {
+      const r = await haiku.establish(fresh.map(repo => ({ repo, ...estMeta[repo.toLowerCase()].github })));
+      for (const repo of fresh) {
+        const v = r.get(repo);
+        if (v?.replaces?.length) { estAdded.push({ repo, name: v.name || repo.split("/")[1], replaces: v.replaces, category: v.category, added: today }); log(`established: added ${repo} (replaces ${v.replaces.join(", ")})`); }
+        else estMeta[repo.toLowerCase()] = { ...estMeta[repo.toLowerCase()], rejected: today };
+      }
+    }
+    // README pictures and logos, weekly
+    if (githubImage) for (const a of listed().values()) {
+      const m = estMeta[a.repo.toLowerCase()];
+      if (!m?.github || (m.github.image_checked && now - Date.parse(m.github.image_checked) < WEEK)) continue;
+      const got = await githubImage(a.repo);
+      if (got === undefined) continue;
+      const { image = null, logo = null } = got && typeof got === "object" ? got : { image: got };
+      Object.assign(m.github, { image, logo, image_checked: nowIso });
+    }
+    let shown = 0;
+    for (const a of listed().values()) {
+      const gh = estMeta[a.repo.toLowerCase()]?.github;
+      if (!passes(gh) || known.has(a.repo.toLowerCase())) continue;
+      const id = "est:" + gh.repo.toLowerCase();
+      // ⚑ Object works here too: six real objections take an entry down for good
+      const t = tallies.get(postCode(id));
+      if (removedIds.has(id)) continue;
+      if (t?.removed) { removedIds.add(id); removedProjects.push({ name: a.name || gh.repo, at: today, objections: t.counted }); continue; }
+      const before = prevById.get(id);
+      const stars = gh.stars, days = (now - Date.parse(gh.pushed_at)) / 864e5;
+      const sc = Math.max(50, Math.min(97, Math.round(55 + 12 * Math.log10(stars / 1000) + (gh.commits_30d > 20 ? 4 : 0) + (gh.downloads > 100000 ? 4 : 0))));
+      const reception = { verdict: "established", score: sc, parts: { github: sc }, confirmed: true, repo_counted: true, confidence: "github",
+        reasons: [`${stars.toLocaleString("en")} GitHub stars`, days < 31 ? "updated this month" : `updated ${Math.round(days)} days ago`, "established open-source app"] };
+      const h = [...(before?.history || [])];
+      if (h.at(-1)?.verdict !== "established") h.push({ at: today, verdict: "established", score: sc });
+      groups.push({
+        id, code: postCode(id), status: "ok", established: true, kind: "established", source: "github",
+        project: a.name || gh.repo.split("/")[1], repo: gh.repo, url: gh.url || `https://github.com/${gh.repo}`,
+        replaces: a.replaces, original: a.replaces.join(", "), original_clean: a.replaces[0], product: matchProduct(a.replaces[0]),
+        category: a.category || "Other", summary: gh.description || "", text: "", created_at: gh.created ? gh.created + "T00:00:00Z" : nowIso,
+        author: { username: gh.repo.split("/")[0] }, metrics: { likes: 0, reposts: 0, replies: 0, quotes: 0, bookmarks: 0, views: 0 },
+        github: gh, reception, history: h, posts: [], objections: t?.counted || 0,
+      });
+      shown++;
+    }
+    log(`established: ${shown} shown of ${listed().size} listed`);
+  }
+
   // Steady ratings: a new rating shows once it has held for two scans in a row, so a score
   // hovering at a threshold doesn't flip the card back and forth. Shown at once: Don't touch
   // (safety first), a jump of 20+ points, and brand-new cards.
-  const prevById = new Map((fromX ? prev.groups || [] : []).map(g => [g.id, g]));
   let held = 0;
   for (const g of groups) {
     const before = prevById.get(g.id);
@@ -707,6 +776,8 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
       removed_projects: removedProjects,
       audit: audit.slice(0, 50),
       compare,
+      established_meta: estMeta,
+      established_added: estAdded,
       newsletter: await newsletter(),
       counts,
     },

@@ -38,6 +38,16 @@ Everything runs by itself. Nobody reviews listings, ratings, objections or the n
   - there's a sitemap and robots.txt.
 - **Usage:** GoatCounter page views on every page, plus events for Get, Open, GitHub, shares, filters, categories, search, Surprise me, the newsletter, votes and objections.
 
+## 🏛️ Established open-source alternatives
+
+A separate section for mature open-source apps that replace a paid one: Kdenlive for Premiere Pro, OBS Studio, GIMP, LibreOffice, Bitwarden for 1Password, and so on. They're rated on their GitHub use, not on X reactions, since nobody "launches" them any more.
+
+- **Who gets in:** the hand-picked list in [`established.json`](established.json) (40 to start), plus any repo suggested through #FlatteryAdd or the workflow's `repos` box that isn't a clone but passes the bar. For those, Haiku names the paid products it replaces.
+- **The bar:** 1,000+ GitHub stars, a change in the last 6 months, and (for suggested ones) a license. An app that stops changing for 6 months drops off.
+- **The score:** from stars, recent activity and downloads (50–97).
+- **Where it shows:** in its own sidebar view (🏛️ Established) and a shelf on Discover, but never in the clone ratings or the stats. On each "Free alternatives to X" page, established apps come first, then the new clones.
+- **Everything else:** Get, "Can I use it?", the comparison with the original and ⚑ Object all work as for clones.
+
 ## Anyone can take part, through X
 
 | Button | What it posts | What happens |

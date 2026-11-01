@@ -19,6 +19,7 @@ const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "im
 const dataUrl = async file => `data:${MIME[file.split(".").pop().toLowerCase()] || "image/png"};base64,${(await readFile(file)).toString("base64")}`;
 
 const LABEL = {
+  established: ["🏛️", "Established open-source", "#4f46e5"],
   "well-received": ["❤️", "Loved", "#e11d48"], proven: ["⭐", "Proven on GitHub", "#b7791f"], unconfirmed: ["🔥", "Hyped, unproven", "#e07a1f"],
   mixed: ["😐", "Mixed", "#6b6a75"], "stay-away": ["☠️", "Don't touch", "#16151a"], "too-early": ["🆕", "New & untested", "#0e8a8c"], faded: ["🌫️", "Didn't catch on", "#6b6a75"],
 };
@@ -56,8 +57,8 @@ function card(g, thumb) {
     <div class="text" style="--rc:${rc}">
       <div class="rate"><span>${emo}</span>${esc(rating)}</div>
       <h1 class="${n.length > 14 ? "long" : ""}">${esc(n)}</h1>
-      ${what(g) ? `<div class="of">≈ ${esc(what(g))}</div>` : ""}
-      <div class="stats"><span><b>${g.reception.score}</b> score</span><span><b>${num(g.metrics.likes)}</b> likes</span>
+      ${what(g) ? `<div class="of">${g.reception.verdict === "established" ? "Free alternative to" : "≈"} ${esc(what(g))}</div>` : ""}
+      <div class="stats"><span><b>${g.reception.score}</b> score</span>${g.reception.verdict === "established" ? "" : `<span><b>${num(g.metrics.likes)}</b> likes</span>`}
         ${g.reception.repo_counted && g.github?.stars ? `<span><b>${num(g.github.stars)}</b> ★</span>` : ""}</div>
     </div>
     <div class="foot"><span>flattery.sala.company</span><span>Imitation is the sincerest form of flattery</span></div>`);

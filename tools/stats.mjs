@@ -24,7 +24,8 @@ const isApp = w => /^[A-Z0-9]/.test(w);
 const slug = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 const { groups = [], info = {} } = JSON.parse(await readFile(a.data, "utf8"));
-const live = groups.filter(g => g.status === "ok");
+// The clone scene: established open-source apps have their own section and aren't counted here
+const live = groups.filter(g => g.status === "ok" && g.reception?.verdict !== "established");
 const now = Date.parse(info.generated_iso || new Date().toISOString());
 const own = g => g.github && g.github.status !== "gone" && g.reception.repo_counted ? g.github : null;
 const days = iso => (now - Date.parse(iso)) / 864e5;

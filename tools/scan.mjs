@@ -64,6 +64,7 @@ const usedThisMonth = prev?.info?.month?.key === month ? prev.info.month.reads :
 const maxReads = Math.max(0, Math.min(+a["max-reads"], monthCap - usedThisMonth));
 if (maxReads < +a["max-reads"]) log(`monthly X budget: ${usedThisMonth} of ${monthCap} reads used, ${maxReads} left for this run`, "warn");
 
+const established = JSON.parse(await readFile(new URL("../established.json", import.meta.url), "utf8"));
 const repoTerms = a.repos.split(/[\s,]+/).map(s => s.trim().replace(/^https?:\/\/(www\.)?github\.com\//i, "").replace(/\.git$|\/+$/g, ""))
   .map(s => s.split("/").slice(0, 2).join("/")).filter(s => /^[\w.-]+\/[\w.-]+$/.test(s)).map(r => `url:"github.com/${r}"`);
 if (repoTerms.length) log(`adding repos: ${repoTerms.join(", ")}`);
@@ -81,6 +82,9 @@ const { results, groups, info: runInfo } = await run(prev, {
   // becomes a search for X posts linking it over the last 6 months; triage still decides.
   search: [...a.search.split(",").map(s => s.trim()).filter(Boolean), ...repoTerms],
   searchDays: repoTerms.length ? Math.max(+a["search-days"], 180) : +a["search-days"],
+  // Established open-source apps (established.json), and repos asked for that may be one
+  established: established.apps || [],
+  addRepos: repoTerms.map(t => t.match(/github\.com\/([^"]+)/)[1]),
   overrides,
 }, {
   x, haiku, log,
@@ -172,7 +176,7 @@ await writeFile(`${a.out}/latest.html`, reportHtml({ css, renderJs, noteHtml, re
 // RSS: newly rated and newly promoted projects of the last two weeks
 const site = "https://flattery.sala.company/";
 const xml = s => String(s ?? "").replace(/[<>&'"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]));
-const LABEL = { faded: "🌫️ Didn't catch on", "well-received": "❤️ Loved", proven: "⭐ Proven on GitHub", unconfirmed: "🔥 Hyped, unproven", mixed: "😐 Mixed", "stay-away": "☠️ Don't touch", "too-early": "🆕 New & untested" };
+const LABEL = { established: "🏛️ Established open-source", faded: "🌫️ Didn't catch on", "well-received": "❤️ Loved", proven: "⭐ Proven on GitHub", unconfirmed: "🔥 Hyped, unproven", mixed: "😐 Mixed", "stay-away": "☠️ Don't touch", "too-early": "🆕 New & untested" };
 const fresh = groups.filter(g => g.status === "ok" && !["too-early", "faded"].includes(g.reception.verdict) && g.history?.length &&
   Date.now() - Date.parse(g.history.at(-1).at) < 14 * 864e5).sort((p, q) => q.history.at(-1).at.localeCompare(p.history.at(-1).at)).slice(0, 40);
 await writeFile(`${a.out}/feed.xml`, `<?xml version="1.0" encoding="utf-8"?>
