@@ -52,6 +52,7 @@ const replyPosts = {
 };
 let deleted = new Set();
 let complaintPosts = [];
+let addPosts = [];
 let archiveRefused = false;
 // an older popular post only full-archive search can find
 const oldPost = post("p9", "u3", "I reverse engineered the AirDrop protocol, open source", 15 * 24, metrics(3000, 600, 150, 40, 200000), "https://github.com/carol/opendrop");
@@ -69,6 +70,7 @@ globalThis.fetch = async url => {
     const conv = q.match(/conversation_id:(\w+)/);
     if (conv) return pack(replyPosts[conv[1]] || []);
     if (q.startsWith("#FlatteryRemove")) return pack(complaintPosts);
+    if (q.startsWith("#FlatteryAdd")) return pack(addPosts);
     if (u.searchParams.get("since_id")) return pack([]);
     if (u.pathname.endsWith("/all")) return pack([oldPost, posts.p4]);
     return pack(Object.values(posts).filter(p => !deleted.has(p.id)));

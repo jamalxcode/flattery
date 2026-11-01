@@ -35,6 +35,7 @@ const { values: a } = parseArgs({
     "backfill-days": { type: "string", default: "0" },
     "backfill-per-query": { type: "string", default: "200" },
     search: { type: "string", default: "" },
+    repos: { type: "string", default: "" },
     "search-days": { type: "string", default: "21" },
   },
 });
@@ -63,6 +64,9 @@ const usedThisMonth = prev?.info?.month?.key === month ? prev.info.month.reads :
 const maxReads = Math.max(0, Math.min(+a["max-reads"], monthCap - usedThisMonth));
 if (maxReads < +a["max-reads"]) log(`monthly X budget: ${usedThisMonth} of ${monthCap} reads used, ${maxReads} left for this run`, "warn");
 
+const repoTerms = a.repos.split(/[\s,]+/).map(s => s.trim().replace(/^https?:\/\/(www\.)?github\.com\//i, "").replace(/\.git$|\/+$/g, ""))
+  .map(s => s.split("/").slice(0, 2).join("/")).filter(s => /^[\w.-]+\/[\w.-]+$/.test(s)).map(r => `url:"github.com/${r}"`);
+if (repoTerms.length) log(`adding repos: ${repoTerms.join(", ")}`);
 const x = new X(xToken, log, { maxReads, maxWait: +a["max-wait"] });
 const haiku = new Haiku(log);
 const { results, groups, info: runInfo } = await run(prev, {
@@ -73,8 +77,10 @@ const { results, groups, info: runInfo } = await run(prev, {
   maxReactions: +a["max-reactions"],
   backfillDays: +a["backfill-days"],
   backfillPerQuery: +a["backfill-per-query"],
-  search: a.search.split(",").map(s => s.trim()).filter(Boolean),
-  searchDays: +a["search-days"],
+  // --repos: GitHub repos to add (links or owner/repo). Flattery lists what X talks about, so each
+  // becomes a search for X posts linking it over the last 6 months; triage still decides.
+  search: [...a.search.split(",").map(s => s.trim()).filter(Boolean), ...repoTerms],
+  searchDays: repoTerms.length ? Math.max(+a["search-days"], 180) : +a["search-days"],
   overrides,
 }, {
   x, haiku, log,
