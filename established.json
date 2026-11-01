@@ -10,7 +10,7 @@
     { "repo": "jellyfin/jellyfin", "name": "Jellyfin", "replaces": ["Plex Pass"], "category": "Media" },
     { "repo": "GNOME/gimp", "name": "GIMP", "replaces": ["Adobe Photoshop"], "category": "Design" },
     { "repo": "KDE/krita", "name": "Krita", "replaces": ["Adobe Photoshop", "Corel Painter"], "category": "Design" },
-    { "repo": "inkscape/inkscape", "name": "Inkscape", "replaces": ["Adobe Illustrator"], "category": "Design" },
+    { "repo": "GraphiteEditor/Graphite", "name": "Graphite", "replaces": ["Adobe Illustrator"], "category": "Design" },
     { "repo": "blender/blender", "name": "Blender", "replaces": ["Autodesk Maya", "Autodesk 3ds Max"], "category": "Design" },
     { "repo": "darktable-org/darktable", "name": "darktable", "replaces": ["Adobe Lightroom"], "category": "Design" },
     { "repo": "penpot/penpot", "name": "Penpot", "replaces": ["Figma"], "category": "Design" },
@@ -24,7 +24,7 @@
     { "repo": "zotero/zotero", "name": "Zotero", "replaces": ["EndNote"], "category": "Office" },
     { "repo": "mattermost/mattermost", "name": "Mattermost", "replaces": ["Slack"], "category": "Communication" },
     { "repo": "jitsi/jitsi-meet", "name": "Jitsi Meet", "replaces": ["Zoom"], "category": "Communication" },
-    { "repo": "calcom/cal.com", "name": "Cal.com", "replaces": ["Calendly"], "category": "Business" },
+    { "repo": "calcom/cal.diy", "name": "Cal.com", "replaces": ["Calendly"], "category": "Business" },
     { "repo": "twentyhq/twenty", "name": "Twenty", "replaces": ["Salesforce"], "category": "Business" },
     { "repo": "chatwoot/chatwoot", "name": "Chatwoot", "replaces": ["Intercom", "Zendesk"], "category": "Business" },
     { "repo": "documenso/documenso", "name": "Documenso", "replaces": ["DocuSign"], "category": "Business" },
@@ -40,6 +40,6 @@
     { "repo": "supabase/supabase", "name": "Supabase", "replaces": ["Firebase"], "category": "Dev tools" },
     { "repo": "godotengine/godot", "name": "Godot", "replaces": ["Unity"], "category": "Games" },
     { "repo": "open-webui/open-webui", "name": "Open WebUI", "replaces": ["ChatGPT Plus"], "category": "AI" },
-    { "repo": "comfyanonymous/ComfyUI", "name": "ComfyUI", "replaces": ["Midjourney"], "category": "AI" }
+    { "repo": "Comfy-Org/ComfyUI", "name": "ComfyUI", "replaces": ["Midjourney"], "category": "AI" }
   ]
 }
