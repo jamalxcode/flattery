@@ -288,6 +288,22 @@ assert.ok(r1.groups.length >= 1 && r1.groups.every(g => g.reception && g.history
   assert.equal(s2.groups.find(g => g.id === g0.id).reception.verdict, g0.reception.verdict, "and shows when it holds");
 }
 
+// Established open-source apps: listed ones with 1,000+ stars and a recent change get a card
+// of their own, rated on GitHub; a suggested repo that isn't a clone is added when Haiku names
+// a paid product it replaces
+{
+  stars["kde/kden"] = 5000; stars["old/editor"] = 3000; stars["new/tool"] = 2000;
+  const gh = async names => new Map([...(await githubStats(names))].map(([n, v]) => [n, { ...v, pushed_at: n === "old/editor" ? "2025-01-01T00:00:00Z" : "2026-10-29T00:00:00Z" }]));
+  const h2 = { ...haiku, establish: async list => new Map(list.map(r => [r.repo, { replaces: ["Adobe Premiere Pro"], name: "NewTool", category: "Media" }])) };
+  const re = await run(JSON.parse(JSON.stringify(r1)), { perQuery: 50, productsPerRun: 0, repoSearches: 0, addRepos: ["new/tool"],
+    established: [{ repo: "kde/kden", name: "Kden", replaces: ["Adobe Premiere Pro"], category: "Media" }, { repo: "old/editor", name: "Old", replaces: ["X"], category: "Media" }] },
+    { x: new X("token", log, { maxReads: 3000 }), haiku: h2, githubStats: gh, log, now: T0 + 48 * H });
+  const k = re.groups.find(g => g.id === "est:kde/kden");
+  assert.ok(k && k.reception.verdict === "established" && k.original_clean === "Adobe Premiere Pro", "a listed app gets an Established card");
+  assert.ok(!re.groups.some(g => g.id === "est:old/editor"), "one not changed in 6 months doesn't");
+  assert.ok(re.info.established_added.some(a => a.repo === "new/tool") && re.groups.some(g => g.id === "est:new/tool"), "a suggested repo that passes is added");
+}
+
 // The week's newsletter is written from rating changes
 assert.ok(r1.info.newsletter?.length === 1 && r1.info.newsletter[0].items.length === 2, "a newsletter issue is written");
 assert.ok(by(r1, "p1").category, "new entries get a category");

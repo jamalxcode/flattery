@@ -148,6 +148,7 @@ details.more summary { cursor: pointer; font-weight: 700; font-size: 0.92rem; }
 .tile-mark.m { font-size: 2rem; } .tile-mark.s { font-size: 1.5rem; letter-spacing: -0.03em; }
 .tile-of { font-size: 0.82rem; font-weight: 600; opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .r-faded { --rc: var(--c-mixed); }
+.r-est { --rc: var(--accent); }
 .r-loved { --rc: var(--c-loved); } .r-proven { --rc: var(--c-proven); } .r-hype { --rc: var(--c-hype); } .r-new { --rc: var(--c-new); } .r-mixed { --rc: var(--c-mixed); } .r-danger { --rc: var(--c-danger); }
 
 .card h3 button { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; font-weight: inherit; letter-spacing: inherit; }

@@ -3,6 +3,7 @@
 // Shared by the live page and the standalone report. opts.search: an <input> outside root to filter with.
 // opts.base: where the catalog's files (thumbnails) live, relative to the page ("data/").
 const RATINGS = [
+  ["established", "🏛️", "Established", "Mature open-source apps that replace a paid one, rated on their GitHub use. Not new clones.", "est"],
   ["well-received", "❤️", "Loved", "Real use on GitHub and a real crowd on X, mostly positive.", "loved"],
   ["proven", "⭐", "Proven on GitHub", "Lots of stars or downloads on the poster's own repo, but quiet on X so far.", "proven"],
   ["unconfirmed", "🔥", "Hyped, unproven", "Lots of buzz on X, but no repo or one nobody uses yet.", "hype"],
@@ -13,7 +14,7 @@ const RATINGS = [
 ];
 
 // Order for promotions and demotions
-const RANK = { "stay-away": 0, faded: 0.5, "too-early": 1, mixed: 2, unconfirmed: 3, proven: 3.5, "well-received": 4 };
+const RANK = { "stay-away": 0, faded: 0.5, "too-early": 1, mixed: 2, unconfirmed: 3, proven: 3.5, established: 3.5, "well-received": 4 };
 const SITE = "https://flattery.sala.company/";
 const CAT_ICON = { Design: "🎨", Office: "📄", "Dev tools": "🛠", AI: "🤖", Media: "🎬", Utilities: "🧰", Communication: "💬", Business: "💼", Games: "🎮", Other: "📦" };
 const CATEGORIES = ["Design", "Office", "Dev tools", "AI", "Media", "Utilities", "Communication", "Business", "Games", "Other"];
@@ -41,6 +42,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const pageUrl = e => e.code ? `${SITE}p/${e.code}/` : `${SITE}#p=${encodeURIComponent(e.id)}`;
   const src = e => e.source === "hn" ? "Hacker News" : e.source === "reddit" ? "Reddit" : "X";
   const unrated = v => v === "too-early" || v === "faded";
+  // Established apps have a section of their own; the clone views (Discover, the ratings) leave them out
+  const est = e => e.reception?.verdict === "established";
   // Can I use it? From the poster's own repo: installers in its releases, a web demo, a license,
   // and whether anyone still works on it
   const usable = e => {
@@ -79,7 +82,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   // Downloads run on the visitor's computer, so they're offered only for rated, established
   // projects: Loved or Proven, a repo at least two weeks old with 50+ stars. Web apps (Open)
   // run in the browser and are offered for anything but Don't touch.
-  const trusted = e => ["well-received", "proven"].includes(e.reception?.verdict) && (e.github?.stars || 0) >= 50 &&
+  const trusted = e => ["well-received", "proven", "established"].includes(e.reception?.verdict) && (e.github?.stars || 0) >= 50 &&
     e.github?.created && Date.now() - Date.parse(e.github.created) >= 14 * 864e5;
   const getLink = e => {
     if (e.reception?.verdict === "stay-away") return null;
@@ -89,7 +92,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
     if (u.homepage) return { label: "Open", long: "Open the web app", url: u.homepage, title: "Open it in your browser" };
     return null;
   };
-  const OF = { clone: "Clone of", "reverse-engineered": "Reverse-engineered", reimagined: "Reimagined", port: "Port of" };
+  const OF = { clone: "Clone of", "reverse-engineered": "Reverse-engineered", reimagined: "Reimagined", port: "Port of", established: "Free alternative to" };
   const ofLine = e => what(e) ? `${OF[e.kind] || "Clone of"} ${what(e)}` : (e.kind || "clone");
   const hue = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
   const live = DATA.filter(e => e.status !== "gone");
@@ -229,7 +232,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const $ = k => root.querySelector(`[data-r=${k}]`);
   const by = v => live.filter(e => e.reception.verdict === v);
 
-  if (search) search.placeholder = `Search ${live.length} clones…`;
+  if (search) search.placeholder = `Search ${live.length} free apps…`;
 
   // A row, as in an app store: icon, name, what it clones, a line of numbers, and the rating
   // where the price would be
@@ -249,7 +252,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
     const bits = [
       note,
       m ? `<span class="move ${m.up ? "up" : "down"}">${m.up ? "⬆ promoted" : `⬇ was ${rating(m.prev)[1]}`}</span>` : "",
-      `♥ ${num(e.metrics.likes)}`,
+      est(e) ? "" : `♥ ${num(e.metrics.likes)}`,
       counted(e) ? `★ ${num(e.github.stars)}` : "",
       u ? (u.ready === "install" ? `⬇ ${esc(u.platforms.join(" · "))}` : u.ready === "online" ? "🌐 Try online" : "") : "",
       u?.alive === "abandoned" ? '<span class="dead">🪦 abandoned</span>' : "",
@@ -281,7 +284,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   // Sidebar: ratings, then categories
   // The chosen one shows a line saying what it means
   const side = [["all", "🗂", "Everything", live.length, "", "Every clone found, rated or not yet, best first."],
-    ["rated", "✨", "Discover", live.filter(e => !unrated(e.reception.verdict)).length, "", "The highlights: most loved, rising, just promoted, new and proven, then all rated clones."],
+    ["rated", "✨", "Discover", live.filter(e => !unrated(e.reception.verdict) && !est(e)).length, "", "The highlights: most loved, rising, just promoted, new and proven, then all rated clones."],
     ...RATINGS.map(([v, emo, n, d, cls]) => [v, emo, n, by(v).length, cls, d])];
   const gone = DATA.length - live.length;
   if (gone) side.push(["gone", "🗑", "Removed", gone, "", "Listings whose post or repo was deleted."]);
@@ -312,7 +315,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const q = (search || $("q")).value.trim().toLowerCase();
   // A search looks through every rating, not only the current filter
   const f = q && root._filter === "rated" ? "all" : root._filter;
-  let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? !unrated(e.reception.verdict) : e.reception.verdict === f))) &&
+  let rows = DATA.filter(e => (f === "gone" ? e.status === "gone" : e.status !== "gone" && (f === "all" || (f === "rated" ? !unrated(e.reception.verdict) && !est(e) : e.reception.verdict === f))) &&
     (!pick || what(e) === pick) && (!root._cat || e.category === root._cat) && useOk(e));
   // Every word must appear somewhere in the project: its name, what it clones, its rating,
   // category, repo, summary, posters and posts ("adobe photoshop", "loved word", "rust")
@@ -331,7 +334,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   $("altTitle").hidden = !pick;
   if (pick) {
     const p = PRICES[pick.toLowerCase()];
-    $("altTitle").innerHTML = `<h2>Free alternatives to ${esc(pick)}</h2><p>${rows.length} ${rows.length === 1 ? "clone" : "clones"} found online, rated by the crowd and checked on GitHub${p ? `, each saving about $${p} a year` : ""}. Best rated first.</p>`;
+    $("altTitle").innerHTML = `<h2>Free alternatives to ${esc(pick)}</h2><p>${rows.length} free ${rows.length === 1 ? "alternative" : "alternatives"}${rows.some(est) ? ": established open-source apps first, then new clones found on X" : " found on X"}, rated by the crowd and checked on GitHub${p ? `, each saving about $${p} a year` : ""}.</p>`;
   }
   const sorts = {
     score: e => e.reception.score - (e.reception.verdict === "stay-away" ? 1000 : unrated(e.reception.verdict) ? 500 : 0), likes: e => e.metrics.likes,
@@ -339,6 +342,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
   };
   const key = $("sort").value;
   rows.sort((a, b) => sorts[key](b) - sorts[key](a));
+  // On an app's alternatives, the established ones come first
+  if (pick) rows.sort((a, b) => est(b) - est(a));
 
   $("grid").innerHTML = rows.length ? rows.map(e => row(e)).join("")
     : `<li class="empty" style="grid-column:1/-1">${DATA.length ? "Nothing matches. Try another rating or clear the search." : "No clones yet. The first scan appears soon."}</li>`;
@@ -348,11 +353,11 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const discover = f === "rated" && !root._cat && !q && !pick && !useWant;
   root.querySelector(".store-head").classList.toggle("discover", discover);
   $("title").textContent = root._cat && f === "rated" ? `${CAT_ICON[root._cat] || ""} ${root._cat}` : discover ? "Discover" : `${view[0]} ${view[1]}${root._cat ? ` · ${root._cat}` : ""}`;
-  $("listTitle").textContent = discover ? "All rated clones" : q ? "Search results" : `${rows.length} ${rows.length === 1 ? "clone" : "clones"}`;
+  $("listTitle").textContent = discover ? "All rated clones" : q ? "Search results" : `${rows.length} ${f === "established" ? (rows.length === 1 ? "app" : "apps") : rows.length === 1 ? "clone" : "clones"}`;
   if (discover) {
     const top = list => [...list].sort((x, y) => y.reception.score - x.reception.score);
     const loved = top(by("well-received"));
-    const rising = live.filter(e => growth(e) >= 5).sort((x, y) => growth(y) - growth(x));
+    const rising = live.filter(e => !est(e) && growth(e) >= 5).sort((x, y) => growth(y) - growth(x));
     const promoted = top(live.filter(e => moved(e, 7)?.up));
     const newest = live.filter(e => Date.now() - Date.parse(e.created_at) < 7 * 864e5 && e.reception.verdict !== "stay-away")
       .sort((x, y) => y.metrics.likes - x.metrics.likes);
@@ -368,7 +373,8 @@ function renderReport(root, DATA, INFO, opts = {}) {
       shelf("📈 Rising on GitHub", rising, "", e => `<b class="up">+${num(Math.round(growth(e)))} ★/day</b>`) +
       shelf("⬆ Just promoted", promoted, "") +
       shelf("🆕 New this week", newest, "") +
-      shelf("⭐ Proven on GitHub", top(by("proven")), "proven");
+      shelf("⭐ Proven on GitHub", top(by("proven")), "proven") +
+      shelf("🏛️ Established free alternatives", [...by("established")].sort((x, y) => (y.github?.stars || 0) - (x.github?.stars || 0)), "established", e => `<b>★ ${num(e.github?.stars)}</b>`);
   }
   $("discover").hidden = !discover;
 
@@ -457,7 +463,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <div class="actions">
             ${get ? `<a class="primary" href="${esc(get.url)}" target="_blank" rel="noopener nofollow" title="${esc(get.title)}" data-goat="${get.label === "Get" ? "get" : "open"}">${esc(get.long)}</a>` : ""}
             ${e.repo && cls !== "danger" ? `<a${get ? "" : ' class="primary"'} href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener" data-goat="github">View on GitHub</a>` : ""}
-            <a${get || (e.repo && cls !== "danger") ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener" data-goat="post">The post on ${src(e)}</a>
+            ${est(e) ? (e.github?.homepage ? `<a href="${esc(e.github.homepage)}" target="_blank" rel="noopener nofollow" data-goat="website">Website</a>` : "") : `<a${get || (e.repo && cls !== "danger") ? "" : ' class="primary"'} href="${esc(e.url)}" target="_blank" rel="noopener" data-goat="post">The post on ${src(e)}</a>`}
             ${e.repo && cls === "danger" ? `<a href="https://github.com/${esc(e.repo)}" target="_blank" rel="noopener nofollow" data-goat="github">☠️ Repo (don't run it)</a>` : ""}
             <a href="${esc(pageUrl(e))}" data-share="${esc(e.id)}" data-url="${esc(pageUrl(e))}" data-goat="copy-link" onclick="event.preventDefault()">Copy link</a>
             ${cls !== "danger" ? `<a class="xshare fav" href="${esc(xIntent(`❤️ My favourite ${what(e) ? `free take on ${what(e)}` : "clone"}: ${name(e)}${e.summary ? `\n\n${e.summary}` : ""}\n\nRated ${emo} ${rname} by the crowd on Flattery:`, pageUrl(e)))}" target="_blank" rel="noopener" data-goat="share-favourite">❤️ Share as my favourite</a>` : ""}
@@ -493,11 +499,11 @@ function renderReport(root, DATA, INFO, opts = {}) {
           <details class="more"><summary>Details: posts, numbers and how it was scored</summary><div class="more-body">
             ${altUrl(e) ? `<p><a href="${esc(altUrl(e))}">All ${esc(what(e))} alternatives →</a></p>` : ""}
             ${(e.history || []).length > 1 ? `<p class="note-small">Rating history: ${e.history.map(x => `${rating(x.verdict)[1]} ${esc(x.at.slice(5))}`).join(" → ")}</p>` : ""}
-            ${e.text ? `<blockquote class="post">${esc(e.text)}<cite>${src(e) === "X" ? `@${esc(e.author.username)} · ${num(e.author.followers)} followers` : `${esc(e.author.username)} on ${src(e)}`} · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
+            ${est(e) ? "" : e.text ? `<blockquote class="post">${esc(e.text)}<cite>${src(e) === "X" ? `@${esc(e.author.username)} · ${num(e.author.followers)} followers` : `${esc(e.author.username)} on ${src(e)}`} · ${esc((e.created_at || "").slice(0, 10))}${e.group ? " · most liked post" : ""}</cite></blockquote>` : '<p class="note-small">The post was removed from X.</p>'}
             ${e.group ? `<div><h4>${(e.posts_count || e.posts.length)} posts about it · numbers below are added up</h4><ul class="posts">${e.posts.map(p => `<li${p.status === "gone" ? ' class="gone"' : ""}>
               <a href="${esc(p.url)}" target="_blank" rel="noopener">@${esc(p.author)}</a> <span>♥ ${num(p.likes)} · ${esc((p.created_at || "").slice(0, 10))}</span>
               <small>${esc(p.text) || "removed"}</small></li>`).join("")}</ul></div>` : ""}
-            <div><h4>On ${src(e)}${e.group ? " · all posts" : ""}</h4>${xFig}</div>
+            ${est(e) ? "" : `<div><h4>On ${src(e)}${e.group ? " · all posts" : ""}</h4>${xFig}</div>`}
             ${g ? `<div><h4>On GitHub · ${esc(e.repo)}</h4>${e.reception.repo_counted === false ? `<p class="note-small" style="margin-bottom:8px">This repo isn't the poster's own, so its stars and downloads don't count toward the rating.</p>` : ""}<div class="figures">${fig(num(g.stars), "stars")}${fig(num(g.forks), "forks")}${fig(num(g.downloads), "downloads")}${growth != null ? fig((growth >= 0 ? "+" : "") + num(growth), "stars a day") : ""}${fig(esc(g.license || "none"), "license")}</div>
               ${g.status === "archived" ? '<p class="note-small">This repo is archived.</p>' : ""}</div>` : ""}
             ${e.reception.reasons.length ? `<div class="chips">${e.reception.reasons.map(r => `<span class="chip">${esc(r)}</span>`).join("")}</div>` : ""}
