@@ -1,0 +1,23 @@
+name: Suggest a clone
+description: Add a clone, or an established open-source alternative, to flattery.sala.company
+title: "Suggestion: "
+labels: ["suggestion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Paste a link and submit. The next scan (within 8 hours) checks it and replies here with the result.
+        Flattery lists clones people talk about on X, and established open-source apps with 1,000+ GitHub stars.
+  - type: input
+    id: link
+    attributes:
+      label: Link
+      description: The X post announcing it, or its GitHub page
+      placeholder: https://github.com/owner/repo  or  https://x.com/someone/status/123…
+    validations:
+      required: true
+  - type: textarea
+    id: note
+    attributes:
+      label: What does it clone or replace? (optional)
+      placeholder: e.g. a free Photoshop alternative

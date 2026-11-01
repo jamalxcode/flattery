@@ -374,16 +374,28 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   const xl = famous("v3", "Excel", "someone/excel");
   xl.original_clean = "Microsoft Excel"; xl.original = "Excel";
   assert.equal(score(xl, T0).repo_counted, false, "a project named after the app it clones doesn't count as the repo's own");
+  const lp = buildGroups([famous("v4", "Lightpanda", "lightpanda-io/browser")], [], "2026-10-30", T0)[0];
+  assert.equal(lp.repo, "lightpanda-io/browser", "the owner's name can make a repo the project's own");
   const gx = buildGroups([famous("v2", "Ginux", "torvalds/linux")], [], "2026-10-30", T0)[0];
   assert.equal(gx.repo, null, "an unrelated famous repo is dropped");
   assert.equal(gx.foreign_repo, "torvalds/linux");
+}
+
+// Suggestions from the site's GitHub form: links parsed, outcome explained
+{
+  const { parseSuggestion, outcome } = await import("../suggestions.js");
+  assert.deepEqual(parseSuggestion("Link: https://github.com/KDE/kdenlive and https://x.com/a/status/123 https://github.com/jamalxcode/flattery"), { ids: ["123"], repos: ["KDE/kdenlive"] });
+  const [text, done] = outcome({ ids: [], repos: ["kde/kdenlive"] }, { groups: [{ status: "ok", repo: "KDE/kdenlive", project: "Kdenlive", code: "frx", reception: { verdict: "established" }, posts: [] }], results: [], rejected: new Set(), site: "S/" });
+  assert.ok(done && text.includes("S/p/frx/"), "an added suggestion links its page");
+  assert.equal(outcome({ ids: ["9"], repos: [] }, { groups: [], results: [], rejected: new Set(["9"]), site: "" })[1], false);
 }
 
 // Only real app names count as what a project clones
 {
   const { realOriginal } = await import("../pipeline.js");
   for (const ok of ["Adobe Photoshop", "ElevenLabs", "Figma", "OpenAI Sora"]) assert.ok(realOriginal(ok), ok);
-  for (const bad of ["Not specified", "unknown", "N/A", "Reverse engineering tools", "paid TTS services", ""]) assert.ok(!realOriginal(bad), bad);
+  for (const bad of ["Not specified", "unknown", "N/A", "Reverse engineering tools", "paid TTS services", "", "Website", "Ad blocker", "Memory Optimizer", "AI video editor"]) assert.ok(!realOriginal(bad), bad);
+  for (const ok of ["Everything", "Xtreme Download Manager", "Apple AirDrop", "YouTube", "Google Chrome"]) assert.ok(realOriginal(ok), ok);
   assert.equal(pickReadmeImage("![x](https://skills.sh/b/a/b?style=flat-square) ![s](docs/s.png)", "a/b"), "https://raw.githubusercontent.com/a/b/HEAD/docs/s.png");
 }
 // A card with no name of its own but a real original stays on the page ("Discord clone");

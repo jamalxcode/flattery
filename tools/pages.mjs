@@ -58,6 +58,41 @@ const appLd = (g, url) => ({
 
 const ogFor = code => existsSync(`${a.out}/data/og/${code}.png`) ? `${SITE}data/og/${code}.png` : `${SITE}data/og/home.png`;
 
+// The project's page as plain HTML, for search engines and readers without JavaScript: what it
+// is, how it compares with the original, whether you can install it, what people said. The app
+// replaces it with the full page when it loads.
+const OS_LIST = ["Mac", "Windows", "Linux", "Android", "iOS"];
+const slug = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// Apps that get a "Free alternatives" page (2+ alternatives, or a well-known product)
+const altCount = new Map();
+for (const g of live) if (what(g) && g.reception.verdict !== "faded") altCount.set(what(g), (altCount.get(what(g)) || 0) + 1);
+const hasAltPage = g => what(g) && (altCount.get(what(g)) >= 2 || live.some(x => what(x) === what(g) && x.product));
+function staticCard(g, emo, rating, stars) {
+  const n = name(g), w = what(g), est = g.reception.verdict === "established";
+  const c = g.compare, gh = g.github && g.github.status !== "gone" ? g.github : null;
+  const li = list => list.map(x => `<li>${esc(x)}</li>`).join("");
+  const platforms = (gh?.platforms || []).filter(p => OS_LIST.includes(p));
+  const use = gh ? [
+    platforms.length ? `Installers for ${platforms.join(", ")} in its GitHub releases.` : gh.homepage ? `Runs online at ${esc(gh.homepage.replace(/^https?:\/\//, "").replace(/\/$/, ""))}.` : "Source code only: you build it yourself.",
+    gh.license && gh.license !== "NOASSERTION" ? `License: ${esc(gh.license)}.` : "No license: by default others may not use, copy or change it.",
+    gh.pushed_at ? `Last changed ${esc(gh.pushed_at.slice(0, 10))}.` : "",
+  ].filter(Boolean) : [];
+  return `<article class="static-card">
+    <p class="issue-date">${emo} ${esc(rating)} · score ${g.reception.score}</p>
+    <h1>${esc(n)}${w ? `: a free ${est ? "open-source alternative to" : g.kind === "reverse-engineered" ? "reverse-engineered" : g.kind === "port" ? "port of" : "alternative to"} ${esc(w)}` : ""}</h1>
+    <p>${esc(g.summary || "")}</p>
+    ${c && (c.does?.length || c.missing?.length) ? `<h2>${esc(n)} vs ${esc(w)}</h2>
+    ${c.verdict ? `<p>${esc(c.verdict)}</p>` : ""}
+    ${c.does?.length ? `<h3>What it does like ${esc(w)}</h3><ul>${li(c.does)}</ul>` : ""}
+    ${c.missing?.length ? `<h3>What's missing compared with ${esc(w)}</h3><ul>${li(c.missing)}</ul>` : ""}
+    <p>Opens ${esc(w)} files: ${({ yes: "yes", partly: "partly", no: "no" })[c.opens_files] || "not said"}.</p>` : ""}
+    ${use.length ? `<h2>Can I use ${esc(n)}?</h2><ul>${li(use)}</ul>` : ""}
+    ${!est && g.sentiment?.sampled ? `<h2>What people said</h2><p>${g.sentiment.positive} positive, ${g.sentiment.neutral} neutral and ${g.sentiment.negative} negative of ${g.sentiment.sampled} replies.${g.sentiment.summary ? ` ${esc(g.sentiment.summary)}` : ""}</p>` : ""}
+    <p>${est ? `${num(gh?.stars)} GitHub stars.` : `${num(g.metrics.likes)} likes and ${num(g.metrics.reposts)} reposts on X${g.posts?.length > 1 ? ` across ${g.posts.length} posts` : ""}${stars}.`}</p>
+    <p>${est ? "" : `<a href="${esc(g.url)}">The post on X</a>`}${g.repo ? `${est ? "" : " · "}<a href="https://github.com/${esc(g.repo)}">${esc(g.repo)} on GitHub</a>` : ""}${hasAltPage(g) ? ` · <a href="alternatives/${slug(w)}/">All free ${esc(w)} alternatives</a>` : ""}</p>
+  </article>`;
+}
+
 // Home page: the shared preview image
 await writeFile(`${a.out}/index.html`, withMeta(index, {
   title: "Flattery: software clones, rated by the crowd",
@@ -78,13 +113,7 @@ for (const g of live) {
   // Relative links (style.css, data/latest.json…) resolve from the site root
   html = html.replace(/<meta charset="utf-8">/, `<meta charset="utf-8">\n<base href="/">`);
   // Readable without JavaScript and for search engines; the app replaces it when it loads
-  html = html.replace('<div id="live"></div>', `<div id="live"><article class="static-card">
-    <p class="issue-date">${emo} ${esc(rating)} · score ${g.reception.score}</p>
-    <h1>${esc(n)}</h1>${what(g) ? `<p class="of">≈ ${esc(what(g))}</p>` : ""}
-    <p>${esc(g.summary || "")}</p>
-    <p>${g.reception.verdict === "established" ? `${num(g.github?.stars)} GitHub stars.` : `${num(g.metrics.likes)} likes and ${num(g.metrics.reposts)} reposts on X${g.posts?.length > 1 ? ` across ${g.posts.length} posts` : ""}${stars}.`}</p>
-    <p>${g.reception.verdict === "established" ? "" : `<a href="${esc(g.url)}">The post on X</a>`}${g.repo ? ` · <a href="https://github.com/${esc(g.repo)}">${esc(g.repo)} on GitHub</a>` : ""}</p>
-  </article></div>`);
+  html = html.replace('<div id="live"></div>', `<div id="live">${staticCard(g, emo, rating, stars)}</div>`);
   html = html.replace("</head>", ld(appLd(g, url)) + "\n</head>");
   html = html.replace('<script src="render.js', `<script>window.FLATTERY_OPEN = ${JSON.stringify(g.id).replace(/</g, "\\u003c")};</script>\n<script src="render.js`);
   await mkdir(`${a.out}/p/${g.code}`, { recursive: true });
@@ -110,7 +139,6 @@ function intro(app, list) {
 }
 
 // "Free alternatives to X": a page per original app, the app filtered to its clones
-const slug = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const byApp = new Map();
 for (const g of live) {
   const w = what(g);

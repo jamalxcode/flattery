@@ -84,6 +84,8 @@ button { font: inherit; color: inherit; }
 .store-head:not(.discover) .motto q, .store-head:not(.discover) .why { display: none; }
 .suggest { display: block; margin-top: 14px; padding: 9px 12px; border-radius: 10px; border: 1px dashed var(--border-2); font-size: 0.86rem; font-weight: 600; text-decoration: none; color: var(--accent); text-align: center; }
 .suggest:hover { background: var(--surface); }
+.suggest-alt { font-size: 0.74rem; color: var(--text-muted); padding: 6px 4px 0; line-height: 1.4; }
+@media (max-width: 900px) { .suggest-alt { display: none; } }
 h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; letter-spacing: -0.04em; font-weight: 800; }
 
 .shelf-sec { padding: 18px 0 8px; border-bottom: 1px solid var(--border); }
