@@ -5,7 +5,7 @@
 const RATINGS = [
   ["established", "🏛️", "Established", "Mature open-source apps that replace a paid one, rated on their GitHub use. Not new clones.", "est"],
   ["well-received", "❤️", "Loved", "Real use on GitHub and a real crowd on X, mostly positive.", "loved"],
-  ["proven", "⭐", "Proven on GitHub", "Lots of stars or downloads on the poster's own repo, but quiet on X so far.", "proven"],
+  ["proven", "⭐", "Proven on GitHub", "Lots of stars or downloads on its own repo, but quiet on X so far.", "proven"],
   ["unconfirmed", "🔥", "Hyped, unproven", "Lots of buzz on X, but no repo or one nobody uses yet.", "hype"],
   ["too-early", "🆕", "New & untested", "Too new or too small to judge yet.", "new"],
   ["faded", "🌫️", "Didn't catch on", "Two weeks on, with little reach and no real GitHub use. It can still come back.", "faded"],
@@ -249,18 +249,17 @@ function renderReport(root, DATA, INFO, opts = {}) {
   const row = (e, note) => {
     const [, emo, rname, , cls] = rating(e.reception.verdict);
     const u = usable(e), m = moved(e);
+    // A short line: what changed, likes or stars, and only warnings worth seeing at a glance.
+    // Installers, online versions and savings are on the Get/Open button and the detail sheet.
     const bits = [
       note,
       m ? `<span class="move ${m.up ? "up" : "down"}">${m.up ? "⬆ promoted" : `⬇ was ${rating(m.prev)[1]}`}</span>` : "",
-      est(e) ? "" : `♥ ${num(e.metrics.likes)}`,
       counted(e) ? `★ ${num(e.github.stars)}` : "",
-      u ? (u.ready === "install" ? `⬇ ${esc(u.platforms.join(" · "))}` : u.ready === "online" ? "🌐 Try online" : "") : "",
+      est(e) || (counted(e) && e.github.stars >= 100) ? "" : `♥ ${num(e.metrics.likes)}`,
       u?.alive === "abandoned" ? '<span class="dead">🪦 abandoned</span>' : "",
-      e.trials ? `✅ ${e.trials.works} · ❌ ${e.trials.broken}` : "",
       e.reception.disputed ? '<span class="obj">⚠️ Disputed</span>' : "",
       e.objections ? `<span class="obj" title="objections counted">⚑ ${e.objections}</span>` : "",
-      price(e) ? `<span class="save">saves ~$${price(e)}/yr</span>` : "",
-    ].filter(Boolean);
+    ].filter(Boolean).slice(0, 3);
     return `<li><article class="card r-${cls}${e.status === "gone" ? " gone" : ""}">
       ${icon(e)}
       <div class="card-body">
@@ -270,7 +269,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
       </div>
       <div class="get"><span class="pill" title="${esc(rname)}, score ${e.reception.score}">${emo} ${e.reception.score}</span>${(g => g
         ? `<a class="get-btn" href="${esc(g.url)}" target="_blank" rel="noopener nofollow" title="${esc(g.title)}" data-goat="${g.label === "Get" ? "get" : "open"}">${g.label}</a>`
-        : `<small>${esc(rname)}</small>`)(getLink(e))}</div>
+        : "")(getLink(e))}</div>
     </article></li>`;
   };
   const shelf = (title, list, filter, note) => list.length ? `<section class="shelf-sec">

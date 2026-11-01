@@ -63,13 +63,13 @@ button { font: inherit; color: inherit; }
 .more-menu .menu a:hover, .more-menu .menu button:hover { background: var(--surface-2); }
 
 /* App store layout: a sidebar of ratings and categories beside the rows */
-.store { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 36px; align-items: start; padding-top: 24px; }
+.store { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 40px; align-items: start; padding-top: 24px; }
 .side { position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
 .side-group { display: flex; flex-direction: column; gap: 2px; }
 .side-h { font-size: 0.72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); padding: 16px 12px 6px; }
-.side-item { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: 10px; background: none; cursor: pointer; font-size: 0.93rem; font-weight: 600; }
+.side-item { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; padding: 8px 12px; white-space: nowrap; border: 0; border-radius: 10px; background: none; cursor: pointer; font-size: 0.93rem; font-weight: 600; }
 .side-item .emo { font-size: 1.05rem; text-align: center; }
-.side-desc { grid-column: 2 / -1; font-size: 0.76rem; font-weight: 500; line-height: 1.35; color: var(--text-muted); }
+.side-desc { white-space: normal; grid-column: 2 / -1; font-size: 0.76rem; font-weight: 500; line-height: 1.35; color: var(--text-muted); }
 .side-note { display: none; }
 .side-item .n { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); }
 .side-item:hover { background: var(--surface-2); }
@@ -97,9 +97,9 @@ h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.05; letter-spacing: -0.04
 select { height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; max-width: 100%; }
 
 /* Rows of apps: icon, name, subtitle, numbers, and the rating where the price would be */
-.rows { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); column-gap: 32px; }
+.rows { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); column-gap: 48px; }
 .rows > li { min-width: 0; }
-.card { position: relative; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.card { position: relative; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); }
 .card:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
 .card.gone { opacity: .55; }
 .card.r-faded { opacity: .8; }
@@ -110,10 +110,10 @@ select { height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid 
 .icon img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; padding: 6px; }
 .icon.big { width: 84px; height: 84px; border-radius: 19px; font-size: 1.8rem; }
 .card.r-danger .icon { background: repeating-linear-gradient(-45deg, #2a2a30 0 8px, #16151a 8px 16px); }
-.card .card h3 { font-size: 1.02rem; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card .of { font-size: 0.86rem; font-weight: 500; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card h3 { font-size: 1.05rem; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; margin-bottom: 2px; }
+.card .of { font-size: 0.86rem; font-weight: 500; line-height: 1.35; color: var(--text-muted); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card .card-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.card .meta { max-width: 100%; font-size: 0.76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .meta { max-width: 100%; margin-top: 3px; font-size: 0.78rem; color: var(--text-muted); }
 .card .meta .sep { margin: 0 5px; opacity: .6; }
 .card .meta .up { color: var(--pos); }
 .get { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 76px; }
@@ -151,7 +151,7 @@ details.more summary { cursor: pointer; font-weight: 700; font-size: 0.92rem; }
 .r-est { --rc: var(--accent); }
 .r-loved { --rc: var(--c-loved); } .r-proven { --rc: var(--c-proven); } .r-hype { --rc: var(--c-hype); } .r-new { --rc: var(--c-new); } .r-mixed { --rc: var(--c-mixed); } .r-danger { --rc: var(--c-danger); }
 
-.card h3 button { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; font-weight: inherit; letter-spacing: inherit; }
+.card h3 button { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; width: 100%; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; font-weight: inherit; letter-spacing: inherit; }
 .card h3 button::after { content: ''; position: absolute; inset: 0; z-index: 1; }
 .card h3 button:focus-visible { outline: none; }
 .move { font-size: 0.78rem; font-weight: 700; }
@@ -345,3 +345,10 @@ footer a { text-decoration: none; font-weight: 600; }
 .vs-yes li::before { content: "✓ "; color: var(--pos); font-weight: 800; }
 .vs-no li::before { content: "✗ "; color: var(--neg); font-weight: 800; }
 .dl-note { margin-top: -6px; }
+
+/* Medium screens: the top bar's buttons show icons only, so the search box keeps its room */
+@media (max-width: 1180px) and (min-width: 641px) {
+  .bar-btn .label { display: none; }
+  .bar-btn { padding: 0 13px; }
+  .search-wrap { min-width: 220px; }
+}
