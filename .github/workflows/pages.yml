@@ -37,6 +37,9 @@ on:
       search_days:
         description: "How many days back the name search goes"
         default: "21"
+      repos:
+        description: "Add these GitHub repos: links or owner/repo, comma-separated. X posts linking them (last 6 months) are found and rated"
+        default: ""
       max_reads:
         description: "Most X posts to read in this run (X bills per post)"
         default: "1000"
@@ -90,13 +93,14 @@ jobs:
           GITHUB_TOKEN: "${{ github.token }}"
           SEARCH: "${{ inputs.search }}"
           SEARCH_DAYS: "${{ inputs.search_days || '21' }}"
+          REPOS: "${{ inputs.repos }}"
           X_COST_PER_READ: "${{ vars.X_COST_PER_READ }}"  # optional repo variable, e.g. 0.005
           X_MONTHLY_READS: "${{ vars.X_MONTHLY_READS || '60000' }}"  # X reads per month before scans pause reading X
         run: |
           mkdir -p data
           BACKFILL="${{ inputs.backfill_days || '0' }}"
           if [ "$BACKFILL" != "0" ]; then EXTRA="--backfill-days $BACKFILL --max-reactions 40 --budget-sec 900"; else EXTRA="--budget-sec 360"; fi
-          if node tools/scan.mjs --max-reads "${{ inputs.max_reads || '1000' }}" --rotate $EXTRA ${SEARCH:+--search "$SEARCH" --search-days "$SEARCH_DAYS"} --cache "$RUNNER_TEMP/prev.json" --out data; then
+          if node tools/scan.mjs --max-reads "${{ inputs.max_reads || '1000' }}" --rotate $EXTRA ${SEARCH:+--search "$SEARCH" --search-days "$SEARCH_DAYS"} ${REPOS:+--repos "$REPOS"} --cache "$RUNNER_TEMP/prev.json" --out data; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::scan failed, republishing the previous catalog"

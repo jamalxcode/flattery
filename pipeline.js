@@ -255,7 +255,16 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
     }
     for (const repo of [...new Set(suggestedRepos)].slice(0, opts.maxSuggestions ?? 5)) {
       if (outOfTime()) break;
-      const { posts } = await x.search(`url:"github.com/${repo}" -is:retweet -is:reply`, { max: 20 });
+      // Six months back when full-archive search works, so older projects can be suggested too
+      const q = `url:"github.com/${repo}" -is:retweet -is:reply`;
+      let posts;
+      try {
+        ({ posts } = await x.search(q, { archive: canArchive, startTime: canArchive ? iso(now - 180 * 864e5) : undefined, max: 30 }));
+      } catch (err) {
+        if (!(err instanceof ArchiveError)) throw err;
+        canArchive = false;
+        ({ posts } = await x.search(q, { max: 20 }));
+      }
       counts.searched++;
       for (const p of posts) {
         if (p.is_reply_or_repost || catalog.has(p.id) || rejected.has(p.id)) continue;

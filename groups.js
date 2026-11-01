@@ -149,7 +149,11 @@ export function buildGroups(posts, prevGroups = [], today = new Date().toISOStri
       const n = e.project || (to && !to.includes("/") ? to : "") || e.display_name;
       if (n) names.set(n, (names.get(n) || 0) + e.metrics.likes + 1);
     }
-    const project = [...names].sort((a, b) => b[1] - a[1])[0]?.[0] || lead.project;
+    // The most used name, but the one that matches the repo when there is one ("Voicebox" for
+    // jamiepine/voicebox, even when the most liked post called it "보이스박스 (Voicebox)")
+    const repoName = norm(baseName(String(anyRepo?.repo || "").split("/")[1]));
+    const matches = n => repoName && norm(baseName(n)) === repoName ? (/^[\x20-\x7e]+$/.test(n) ? 2 : 1) : 0;
+    const project = [...names].sort((a, b) => matches(b[0]) - matches(a[0]) || b[1] - a[1])[0]?.[0] || lead.project;
     const key = anyRepo?.repo ? "repo:" + anyRepo.repo.toLowerCase() : nameKey(lead) ? "name:" + nameKey(lead) : "post:" + lead.id;
     const id = list.length > 1 ? key : lead.id;
     const g = {
