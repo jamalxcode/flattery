@@ -8,9 +8,11 @@ An app store of free clones of the apps you pay for: reverse-engineered, reimagi
 
 Everything runs by itself. Nobody reviews listings, ratings, objections or the newsletter by hand: a scan every 8 hours finds, rates and re-rates projects, and the site rebuilds itself.
 
+**Read more:** [Business rules](docs/BUSINESS-RULES.md) (every rule the site applies, in one place) · [Development decisions](docs/DECISIONS.md) (what we chose while building Flattery, and why)
+
 ## The site
 
-- **App store layout:** a sidebar of views and categories (chips on phones) and rows of apps. Each row has an icon, the name, what it clones, likes, stars and installers, and the rating where the price would be.
+- **App store layout:** a sidebar with ＋ Suggest a clone and 🔔 Follow at the top, then the views and categories (chips on phones), and rows of apps. Each row has an icon, the name, what it clones, a short line (stars or likes, promoted, warnings), and the rating where the price would be, with **Get** or **Open** under it. Names and descriptions wrap instead of being cut off.
   - Views: Everything, Discover, and one per rating.
   - Discover shows Most loved, two featured picks, Rising on GitHub, Just promoted, New this week and Proven, then every rated clone.
 - **Ratings:** ❤️ Loved, ⭐ Proven on GitHub, 🔥 Hyped (unproven), 😐 Mixed, 🆕 New & untested, 🌫️ Didn't catch on and ☠️ Don't touch. The chosen view explains itself in one line. The rules are under [Ratings](#ratings).
@@ -27,16 +29,21 @@ Everything runs by itself. Nobody reviews listings, ratings, objections or the n
 - **Icons:** the README's logo or the organisation's avatar, or the maker's X picture when the poster built it, with initials as the fallback. They're copied to the `data` branch, never hot-linked; SVG is skipped.
 - **Sharing**, from the visitor's own X account: ❤️ *Share as my favourite*, *Share on X* and *Copy link* on every app, and *Share this issue on X* in the newsletter. Each project has its own page, `p/<code>/`, with its own preview image (`data/og/<code>.png`), so a shared link shows that project.
 - **Newsletter:** *This week in clones*, written weekly by Haiku from the week's rating changes. It opens in a drawer (📰) that never covers the cards, with past issues below, and is also in the RSS feed.
-- **How it works** (ℹ️) explains the ratings in a drawer. On phones, Stats, How it works, Free alternatives and Suggest move into a ⋯ menu.
+- **How it works** (ℹ️) explains the ratings in a drawer. On phones, Stats, How it works, Free alternatives, Suggest and Follow move into a ⋯ menu.
+- **Suggest a clone** (`suggest/`): a page with one field for a link. No sign-up anywhere; see [Anyone can take part](#anyone-can-take-part).
+- **🔔 Follow:** free alerts for newly loved apps and the weekly newsletter, in the ntfy app or a browser, with no sign-up (channel `flattery-sala-alerts`).
 - **Free alternatives:**
   - `alternatives/<app>/` exists for every app with 2+ clones, or a well-known product with one.
   - Each page has an intro written from the data (best received, ready to install, runs in the browser) and an `alternatives/` index.
 - **Stats:** `stats/` shows the most-cloned companies and apps, clones per week, ratings by category, the fastest-growing repos, and builders with their hit rate.
 - **For search engines:**
+  - each project page's plain HTML (what crawlers read before the app loads) has the comparison with the original, *Can I use it?* and what people said, under headings like "PhotoCraft vs Adobe Photoshop";
   - project pages carry schema.org `SoftwareApplication` data (free, systems, repo; no star rating is claimed);
   - alternatives pages carry an `ItemList`;
   - there's a sitemap and robots.txt.
-- **Usage:** GoatCounter page views on every page, plus events for Get, Open, GitHub, shares, filters, categories, search, Surprise me, the newsletter, votes and objections.
+- **Light page:** the page loads `data/site.json`, only what it shows (about 100 KB compressed); the full `data/latest.json` stays published for RSS/JSON users.
+- **Accessible:** WCAG 2 AA contrast in light and dark themes, a correct heading order, and decorative tiles hidden from screen readers. An axe-core audit runs before every merge.
+- **Usage:** GoatCounter page views on every page, plus events for Get, Open, GitHub, shares, filters, categories, search, Surprise me, the newsletter, suggestions, follows, votes and objections.
 
 ## 🏛️ Established open-source alternatives
 
@@ -48,11 +55,11 @@ A separate section for mature open-source apps that replace a paid one: Kdenlive
 - **Where it shows:** in its own sidebar view (🏛️ Established) and a shelf on Discover, but never in the clone ratings or the stats. On each "Free alternatives to X" page, established apps come first, then the new clones.
 - **Everything else:** Get, "Can I use it?", the comparison with the original and ⚑ Object all work as for clones.
 
-## Anyone can take part, through X
+## Anyone can take part
 
 | Button | What it posts | What happens |
 |---|---|---|
-| ＋ **Suggest a clone** (on the site) | the link, on flattery.sala.company/suggest/ | No sign-up anywhere. The page sends it to the site's [ntfy.sh](https://ntfy.sh) channel (`suggest.json`); each scan reads the channel, checks the link like a #FlatteryAdd post, and the Suggest page lists what became of recent suggestions. Follow the channel in the ntfy app to see suggestions arrive. |
+| ＋ **Suggest a clone** (on the site) | the link, on flattery.sala.company/suggest/ | No sign-up anywhere, and no X account. The page sends it to the site's [ntfy.sh](https://ntfy.sh) channel (`suggest.json`); each scan reads the channel, checks the link like a #FlatteryAdd post, and the Suggest page lists what became of recent suggestions. Follow the channel in the ntfy app to see suggestions arrive. |
 | **#FlatteryAdd** (on X) | `#FlatteryAdd <link>` | The scan looks up the linked X post, or searches X for posts linking the GitHub repo, and judges them like any other. |
 | ✅ **It works** / ❌ **It's broken** | `#FlatteryWorks` / `#FlatteryBroken <code>` | One vote per established account (30+ days old, 10+ followers). 3+ works adds to the score; 3+ broken takes some off. |
 | ⚑ **Object on X** | `#FlatteryRemove <code>` with a reason | The listing comes down once **6** objections count. Each must come from a different established account and give a real reason (judged by Haiku). At most 2 count per 30 minutes, and the first and last must be at least 2 hours apart. |
@@ -61,12 +68,12 @@ A separate section for mature open-source apps that replace a paid one: Kdenlive
 
 `tools/scan.mjs` runs `pipeline.js`, which builds on the previous catalog every 8 hours, so nothing found is ever lost:
 
-1. **Refresh:** new metrics for known posts. That happens every scan in a post's first week, daily up to 30 days, then weekly. Deleted posts stay marked *removed*, with their text dropped.
+1. **Refresh:** new metrics for known posts: every scan in a post's first 2 days, about daily up to 30 days, then weekly. (Re-checks are most of a scan's X reads; this pace keeps a growing catalog inside the monthly budget.) Deleted posts stay marked *removed*, with their text dropped.
 2. **Discover:**
    - X recent search: generic clone queries every run, and product queries from `products.js` in turn. Each query continues from the newest post it saw last time.
    - Builders whose projects reached ❤️ or ⭐ (the watchlist).
    - Posts that link known repos.
-   - `#FlatteryAdd` suggestions.
+   - Suggestions from the Suggest page and `#FlatteryAdd`.
    - Hacker News, through Algolia. Reddit too, when it doesn't block cloud servers.
 3. **Triage:** Claude Haiku (`haiku.js`) keeps only real announcements of a clone, reverse-engineered, reimagined or ported app. It names the original and gives a category. A project gets its own name, or none ("<app> clone"), never a description.
 4. **Reactions:** for posts with reach (20+ likes or 5+ reposts) or 3+ replies, Haiku reads up to 50 replies and 20 quote posts. It records their tone and any red flags: doesn't work, license, scam or malware, wrapper, stolen code, overhyped, security. A flag counts only when two different accounts raise it, with their replies quoted.
@@ -74,13 +81,15 @@ A separate section for mature open-source apps that replace a paid one: Kdenlive
 6. **Score** (`reception.js`), then **merge** posts about the same project into one card (`groups.js`): same repo, or the same specific name. Version numbers don't split a project ("Open Duet 2.0" and "Open-Duet" are one card).
 7. **Second opinion:** Claude Sonnet reviews each ❤️ and ☠️ once, applying the site's rules. When it disagrees, the card shows 😐 Mixed with its note.
 8. **Compared with the original:** Haiku compares up to 6 rated projects a scan with the app they clone, from the README and what people said, and redoes each monthly.
-9. **Newsletter:** weekly.
+9. **Newsletter and alerts:** the newsletter weekly; newly loved apps and each new issue go to the 🔔 Follow channel once.
 10. **Publish:** the catalog goes to the `data` branch (`latest.json`, thumbnails, icons, preview images). Then project, alternatives and stats pages, the sitemap and the RSS feed are written, and the site deploys to GitHub Pages.
 
 **Kept off the page until they grow** (the posts stay in the catalog):
-- brand-new posts with under 3 likes and no repo;
+- untested posts with no repo and under 3 likes (under 5 in their first 3 days);
 - untested ones still tiny after two weeks;
-- cards with neither a name of their own nor an original.
+- cards that don't name a real app they clone: placeholders ("Not specified") or kinds of software ("Website", "Ad blocker"). They get one more try at naming the app first.
+
+A card is never named after the app it clones; it shows as "<app> clone" instead.
 
 **Corrections** (`overrides.json`, applied every scan): `attach` puts a post into a project, `repo` gives a post a repo it didn't link, `separate` stops a merge, `hide` drops a post, and `owned` says whose a repo is.
 
@@ -110,7 +119,8 @@ Penalties apply for being *ratioed* (more replies and quotes than likes), for ea
 **Whose stars count:** GitHub counts when the repo is the project's own. That means:
 - its owner matches the poster;
 - or it was created at most 120 days before the post;
-- or its name is the project's name, even when someone else shared it (Voicebox and `jamiepine/voicebox`).
+- or its name is the project's name, even when someone else shared it (Voicebox and `jamiepine/voicebox`);
+- or its owner carries the project's name (Lightpanda and `lightpanda-io/browser`).
 
 Stars of a famous repo that isn't the project (Linux behind a post about "Ginux") never count, and such a repo isn't shown as the card's repo.
 
@@ -131,7 +141,7 @@ The thresholds live at the top of `reception.js`. Everything here is crowd opini
 - **Never shrinks:** a scan refuses to save a catalog smaller than the last. If X, Haiku or GitHub fails, the last good data stays.
 - **Self-check:** every scan logs any card whose posts link a GitHub repo it doesn't show, and the page's Status section shows ✅ or ⚠️.
 - **Status:** the bottom of the page shows the last scan, scans in the last 7 days, X reads this month and the self-check.
-- **Before merging:** `pr-check.yml` runs on every pull request. It runs the offline tests, then `tools/ui-check.mjs`, which opens the page in a real browser with the real catalog on a desktop and a phone. It checks rows, Discover, search, the sidebar, the detail sheet, How it works, script errors and sideways scrolling.
+- **Before merging:** `pr-check.yml` runs on every pull request. It runs the offline tests, then `tools/ui-check.mjs`, which opens the page in a real browser with the real catalog on a desktop and a phone. It checks rows, Discover, search, the sidebar, the detail sheet, How it works, the Suggest page, script errors, sideways scrolling, and an axe-core accessibility audit (serious or critical problems fail it).
 
 ## Setup
 
@@ -143,16 +153,17 @@ Repository secrets (**Settings → Secrets and variables → Actions**):
 | `ANTHROPIC_API_KEY` | yes | Claude Haiku (triage, replies, names, comparisons, newsletter) and Sonnet (second opinion) |
 | `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_SECRET` | no | Only if the site should post on X by itself: the weekly newsletter and newly loved projects, once each, with a link back. These are the app's keys with *Read and write* permission and the account's access token. Without them nothing is posted. |
 
-The Actions token covers GitHub. Repository variables: `X_MONTHLY_READS` (default 60,000; scans stop reading X past it until the month turns) and `X_COST_PER_READ` (optional; logs each run's estimated X cost).
+The Actions token covers GitHub. `suggest.json` names the two ntfy.sh channels (suggestions in, alerts out); `established.json` holds the hand-picked established apps. Repository variables: `X_MONTHLY_READS` (default 60,000; scans stop reading X past it until the month turns) and `X_COST_PER_READ` (optional; logs each run's estimated X cost).
 
 **Domain:** flattery.sala.company (`CNAME`; DNS: CNAME `flattery` → `jamalxcode.github.io`).
 
 **By hand:** **Actions → Scan and deploy → Run workflow** takes these inputs:
 - `max_reads` (default 1,000);
 - `backfill_days`: also search X's full archive that far back for popular clones;
-- `search`: names to look for, comma-separated, with `search_days`.
+- `search`: names to look for, comma-separated, with `search_days`;
+- `repos`: GitHub repos to add (links or `owner/repo`); X posts from the last 6 months linking them are found and rated, and mature ones that aren't clones are checked for 🏛️ Established.
 
-**Check balances monthly:** your X API credit and your Anthropic balance. If either runs out, scans keep the last data but stop finding and rating.
+**Costs:** GitHub, GitHub Pages, cron-job.org, ntfy.sh and GoatCounter are free. The X API (about 220 reads a scan, capped at `X_MONTHLY_READS`) and Claude (a few dollars a month) are paid from prepaid credit. Turn off auto-recharge on both so nothing is ever charged beyond the credit; if either runs out, scans keep the last data but stop finding and rating, and the freshness check emails you.
 
 ## Running locally
 
@@ -164,10 +175,11 @@ npm test                      # the whole pipeline offline, against fake X, Haik
 X_BEARER_TOKEN=... ANTHROPIC_API_KEY=... GITHUB_TOKEN=... node tools/scan.mjs --cache data/latest.json --out data
 node tools/pages.mjs --data data/latest.json --out .    # project, alternatives pages, sitemap
 node tools/stats.mjs --data data/latest.json --out .    # stats page
-node tools/ui-check.mjs --root .                        # the page in a browser (needs data/latest.json)
+node tools/slim.mjs --data data/latest.json --out data/site.json   # what the page loads
+node tools/ui-check.mjs --root .                        # the page in a browser, with the accessibility audit
 ```
 
-Scan options: `--max-reads`, `--per-query`, `--products-per-run`, `--max-reactions`, `--budget-sec`, `--rotate`, `--backfill-days`, `--search`.
+Scan options: `--max-reads`, `--per-query`, `--products-per-run`, `--max-reactions`, `--budget-sec`, `--rotate`, `--backfill-days`, `--search`, `--repos`.
 
 To search for a product, add a line to `products.js`.
 
