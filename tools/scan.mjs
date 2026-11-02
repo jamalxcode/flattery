@@ -18,7 +18,7 @@ import { repoStats, readmeImage, readmeText } from "../github.js";
 import { run } from "../pipeline.js";
 import { makeSources } from "../sources.js";
 import { reportHtml } from "../report.js";
-import { makePoster, postsToMake } from "../xpost.js";
+import { makePoster, postsToMake, sendAlerts } from "../xpost.js";
 import { makeSuggestions, outcome, ntfyAnswers, parseSuggestion, logEntry } from "../suggestions.js";
 
 const root = new URL("../", import.meta.url);
@@ -188,6 +188,17 @@ if (poster) {
     if (id) { info.posted[p.key] = info.generated_iso.slice(0, 10); log(`posted on X: ${p.key}`); }
   }
 }
+// Alerts for followers (🔔 Follow): newly loved apps and the weekly newsletter, each once, on the
+// site's public ntfy.sh channel. Up to 3 a scan.
+if (suggestCfg.alerts_topic) {
+  info.alerted = { ...(prev?.info?.alerted || {}) };
+  const todo = postsToMake(groups, info, info.alerted, { today: info.generated_iso.slice(0, 10) });
+  const sent = await sendAlerts(suggestCfg.alerts_topic, todo, log);
+  for (const k of sent) info.alerted[k] = info.generated_iso.slice(0, 10);
+  info.alerted = Object.fromEntries(Object.entries(info.alerted).slice(-300));
+  if (todo.length) log(`alerts: ${sent.length} of ${todo.length} sent to followers`);
+}
+
 // Keep the record small: the last 300 posts
 info.posted = Object.fromEntries(Object.entries(info.posted).slice(-300));
 info.month = { key: month, reads: usedThisMonth + x.reads, cap: monthCap };
