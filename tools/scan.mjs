@@ -19,7 +19,7 @@ import { run } from "../pipeline.js";
 import { makeSources } from "../sources.js";
 import { reportHtml } from "../report.js";
 import { makePoster, postsToMake } from "../xpost.js";
-import { makeSuggestions, outcome } from "../suggestions.js";
+import { makeSuggestions, outcome, ntfyAnswers, parseSuggestion, logEntry } from "../suggestions.js";
 
 const root = new URL("../", import.meta.url);
 const { values: a } = parseArgs({
@@ -73,6 +73,13 @@ if (repoTerms.length) log(`adding repos: ${repoTerms.join(", ")}`);
 const suggestions = makeSuggestions(ghToken, process.env.GITHUB_REPOSITORY, log);
 const issues = suggestions ? await suggestions.open() : [];
 if (issues.length) log(`suggestions from the site: ${issues.length} open`);
+// Suggestions from the Suggest page: messages on the site's ntfy.sh channel (suggest.json)
+const suggestCfg = JSON.parse(await readFile(new URL("../suggest.json", import.meta.url), "utf8"));
+const seenIds = new Set(prev?.info?.suggest_seen || []);
+const form = await ntfyAnswers(suggestCfg.ntfy_topic, seenIds, log);
+const formLinks = form.map(m => m.link).filter(Boolean);
+if (formLinks.length) log(`suggest form: ${formLinks.length} new`);
+const formParsed = formLinks.map(parseSuggestion);
 const x = new X(xToken, log, { maxReads, maxWait: +a["max-wait"] });
 const haiku = new Haiku(log);
 const { results, groups, info: runInfo } = await run(prev, {
@@ -89,8 +96,8 @@ const { results, groups, info: runInfo } = await run(prev, {
   searchDays: repoTerms.length ? Math.max(+a["search-days"], 180) : +a["search-days"],
   // Established open-source apps (established.json), and repos asked for that may be one
   established: established.apps || [],
-  addRepos: [...repoTerms.map(t => t.match(/github\.com\/([^"]+)/)[1]), ...issues.flatMap(i => i.repos)],
-  suggest: { ids: issues.flatMap(i => i.ids), repos: issues.flatMap(i => i.repos) },
+  addRepos: [...repoTerms.map(t => t.match(/github\.com\/([^"]+)/)[1]), ...issues.flatMap(i => i.repos), ...formParsed.flatMap(p => p.repos)],
+  suggest: { ids: [...issues.flatMap(i => i.ids), ...formParsed.flatMap(p => p.ids)], repos: [...issues.flatMap(i => i.repos), ...formParsed.flatMap(p => p.repos)] },
   overrides,
 }, {
   x, haiku, log,
@@ -163,6 +170,13 @@ for (const i of issues) {
   await suggestions.reply(i.number, text, done);
 }
 if (issues.length) log(`suggestions from the site: ${issues.length} answered`);
+// The form's suggestions: what became of each, for the Suggest page
+{
+  const ctx = { groups, results, rejected: new Set(runInfo.rejected || []), site: "https://flattery.sala.company/" };
+  const today = info.generated_iso.slice(0, 10);
+  info.suggest_log = [...(prev?.info?.suggest_log || []), ...formLinks.map(l => logEntry(l, outcome(parseSuggestion(l), ctx), ctx, today))].slice(-50);
+  info.suggest_seen = [...seenIds, ...form.map(m => m.id)].slice(-300);
+}
 
 // Posts on X as the Flattery account (only with posting keys): the newsletter and newly loved
 // projects, each once, each linking to the site

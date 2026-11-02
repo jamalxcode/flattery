@@ -34,7 +34,7 @@ export function slimGroup(g) {
   return out;
 }
 
-const INFO = ["source", "generated", "generated_iso", "newsletter", "status", "month", "rejected_samples", "removed_projects", "audit"];
+const INFO = ["source", "generated", "generated_iso", "newsletter", "status", "month", "rejected_samples", "removed_projects", "audit", "suggest_log"];
 const site = { info: { ...pick(info, INFO), rejected_samples: (info.rejected_samples || []).slice(-30) }, groups: groups.map(slimGroup) };
 const body = JSON.stringify(site);
 await writeFile(a.out, body);

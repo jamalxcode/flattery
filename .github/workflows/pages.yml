@@ -142,7 +142,7 @@ jobs:
           git push -q origin data
       - run: rm -rf node_modules
       # New file names each deploy, so browsers never keep running an old script
-      - run: sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" index.html
+      - run: sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" index.html suggest/index.html
       # A page per project (p/<code>/) with its own title and preview, plus sitemap.xml
       # and the "Free alternatives to X" pages and the stats page
       - name: Write project, alternatives and stats pages

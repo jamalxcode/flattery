@@ -82,7 +82,7 @@ button { font: inherit; color: inherit; }
 .status { font-size: inherit; color: var(--text-muted); }
 .store-head.discover .status:not(:empty)::before { content: "· "; }
 .store-head:not(.discover) .motto q, .store-head:not(.discover) .why { display: none; }
-.suggest { display: block; margin-top: 14px; padding: 9px 12px; border-radius: 10px; border: 1px dashed var(--border-2); font-size: 0.86rem; font-weight: 600; text-decoration: none; color: var(--accent); text-align: center; }
+.suggest { display: block; margin: 0 0 10px; padding: 9px 12px; border-radius: 10px; border: 1px dashed var(--border-2); font-size: 0.86rem; font-weight: 600; text-decoration: none; color: var(--accent); text-align: center; }
 .suggest:hover { background: var(--surface); }
 .suggest-alt { font-size: 0.74rem; color: var(--text-muted); padding: 6px 4px 0; line-height: 1.4; }
 @media (max-width: 900px) { .suggest-alt { display: none; } }
@@ -354,3 +354,21 @@ footer a { text-decoration: none; font-weight: 600; }
   .bar-btn { padding: 0 13px; }
   .search-wrap { min-width: 220px; }
 }
+
+/* Suggest page */
+.suggest-page { max-width: 720px; padding-top: 40px; padding-bottom: 60px; }
+.suggest-page h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin-bottom: 10px; }
+.suggest-page .lede { color: var(--text-muted); margin-bottom: 24px; }
+.suggest-form { display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px; }
+.suggest-form label { font-weight: 700; font-size: 0.92rem; margin-top: 6px; }
+.suggest-form label span { font-weight: 500; color: var(--text-muted); margin-left: 6px; font-size: 0.84rem; }
+.suggest-form input { height: 46px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border-2); background: var(--bg); color: var(--text); font: inherit; }
+.suggest-form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.suggest-form button { align-self: flex-start; margin: 12px 0 0; }
+.form-msg { color: var(--text-muted); font-size: 0.9rem; min-height: 1.2em; }
+.suggest-x { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.how-suggest { margin-top: 28px; color: var(--text-muted); }
+.how-suggest h2 { color: var(--text); font-size: 1.15rem; margin-bottom: 8px; }
+.how-suggest ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.recent-list { list-style: none; padding-left: 0 !important; font-size: 0.9rem; }
+.recent-list .when { color: var(--text-muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
