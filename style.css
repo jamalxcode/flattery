@@ -8,8 +8,9 @@
   --border: #e4e2db; --border-2: #d6d3ca; --text: #16151a; --text-muted: #4a4851;
   --accent: #4f46e5; --accent-ink: #ffffff; --accent-soft: #e8e6fd; --ink: #16151a; --ink-text: #ffffff;
   --shadow: 0 1px 2px rgba(22,21,26,.05); --shadow-h: 0 16px 32px -14px rgba(22,21,26,.3);
-  --c-loved: #e11d48; --c-proven: #b7791f; --c-hype: #e07a1f; --c-new: #0e8a8c; --c-mixed: #6b6a75; --c-danger: #16151a;
-  --pos: #15803d; --neg: #d33a2c;
+  /* Rating colours are also used as text: each meets WCAG AA (4.5:1) on the light surfaces */
+  --c-loved: #be123c; --c-proven: #8a5a00; --c-hype: #a34a06; --c-new: #0b6e70; --c-mixed: #6b6a75; --c-danger: #16151a;
+  --pos: #15803d; --neg: #b42318;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0f0f13; --bar: rgba(15,15,19,.88); --surface: #18181e; --surface-2: #22222a;
@@ -148,11 +149,12 @@ details.more summary { cursor: pointer; font-weight: 700; font-size: 0.92rem; }
 /* Pictures (feature cards and the detail sheet) */
 .art { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--surface-2); }
 .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; background: var(--surface-2); }
-.tile { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; padding: 14px 16px; color: #fff;
-  background: radial-gradient(120% 90% at 0% 0%, hsl(var(--h) 85% 62%), transparent 60%), linear-gradient(135deg, hsl(var(--h) 70% 38%), hsl(calc(var(--h) + 50) 65% 22%)); }
+.tile { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; padding: 14px 16px; color: #fff; background-color: hsl(var(--h) 65% 22%);
+  background-image: radial-gradient(120% 90% at 0% 0%, hsl(var(--h) 75% 48%), transparent 60%), linear-gradient(135deg, hsl(var(--h) 65% 28%), hsl(calc(var(--h) + 50) 60% 16%));
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
 .tile-mark { font-size: 2.6rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1.02; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .tile-mark.m { font-size: 2rem; } .tile-mark.s { font-size: 1.5rem; letter-spacing: -0.03em; }
-.tile-of { font-size: 0.82rem; font-weight: 600; opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-of { font-size: 0.82rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .r-faded { --rc: var(--c-mixed); }
 .r-est { --rc: var(--accent); }
 .r-loved { --rc: var(--c-loved); } .r-proven { --rc: var(--c-proven); } .r-hype { --rc: var(--c-hype); } .r-new { --rc: var(--c-new); } .r-mixed { --rc: var(--c-mixed); } .r-danger { --rc: var(--c-danger); }
@@ -195,7 +197,7 @@ details.more summary { cursor: pointer; font-weight: 700; font-size: 0.92rem; }
 .past .issue { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
 a.xshare, a.xobject { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; text-decoration: none; background: var(--ink); color: var(--ink-text); }
 .actions a.xshare { height: 44px; border-radius: 12px; }
-.actions a.xshare.fav { background: var(--c-loved); border-color: var(--c-loved); color: #fff; }
+.actions a.xshare.fav { background: #be123c; border-color: #be123c; color: #fff; }
 .issue-share { float: right; margin: 0 48px 8px 12px; }
 a.xobject { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-2); }
 .object { border-top: 1px solid var(--border); padding-top: 14px; }
@@ -236,7 +238,7 @@ a.xobject { background: var(--surface-2); color: var(--text); border: 1px solid 
 .figures div { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
 .figures b { display: block; font-size: 1.1rem; font-weight: 800; }
 .figures small { color: var(--text-muted); font-size: 0.78rem; }
-.sheet h4 { font-size: 0.78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+.sheet h3 { font-size: 0.78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
 .senti .mini { height: 10px; border-radius: 5px; margin-bottom: 6px; }
 .senti p { font-size: 0.9rem; color: var(--text-muted); }
 .posts { list-style: none; display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow: auto; }
@@ -376,3 +378,8 @@ footer a { text-decoration: none; font-weight: 600; }
 .how-suggest ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .recent-list { list-style: none; padding-left: 0 !important; font-size: 0.9rem; }
 .recent-list .when { color: var(--text-muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+/* The generated tile only shows when there's no picture (or it fails to load): its text is hidden
+   under a picture, so it isn't read as low-contrast text */
+.art:has(img) .tile-mark, .art:has(img) .tile-of { visibility: hidden; }
+.side-item[aria-pressed="true"] .n { color: inherit; }
