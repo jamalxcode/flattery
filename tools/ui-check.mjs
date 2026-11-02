@@ -10,6 +10,16 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium } from "playwright";
+import { createRequire } from "node:module";
+
+// Accessibility audit (axe-core): serious or critical problems fail the check
+const axeSource = await readFile(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
+async function axe(p, where) {
+  await p.addScriptTag({ content: axeSource });
+  const bad = await p.evaluate(async () => (await window.axe.run(document, { runOnly: ["wcag2a", "wcag2aa"] })).violations
+    .filter(v => ["serious", "critical"].includes(v.impact)).map(v => `${v.id} (${v.nodes.length}): ${v.nodes[0].target.join(" ")}`));
+  check(!bad.length, `${where}: accessibility${bad.length ? ": " + bad.join(" | ") : ""}`);
+}
 
 const { values: a } = parseArgs({ options: { root: { type: "string", default: "." } } });
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png",
@@ -67,10 +77,13 @@ for (const [width, label] of [[1280, "desktop"], [390, "phone"]]) {
   check(await p.locator(".grid .card").count() >= rows, `${label}: Everything lists everything`);
   check(width < 900 ? await p.locator("[data-r=sideNote]").isVisible() : await p.locator(".side-desc").count() === 1, `${label}: the chosen view is explained`);
 
+  await axe(p, `${label} list`);
+
   // Detail sheet
   await p.locator(".grid .card h3 button").first().click();
   await p.waitForTimeout(300);
   check(await p.evaluate(() => document.querySelector("[data-r=sheet]")?.open), `${label}: a row opens its detail sheet`);
+  await axe(p, `${label} detail sheet`);
   await p.keyboard.press("Escape");
 
   // How it works
@@ -79,6 +92,12 @@ for (const [width, label] of [[1280, "desktop"], [390, "phone"]]) {
   await p.waitForTimeout(200);
   check(await p.evaluate(() => document.getElementById("about")?.open), `${label}: How it works opens`);
   await p.keyboard.press("Escape");
+
+  // The Suggest page
+  await p.goto(base + "suggest/");
+  await p.waitForTimeout(400);
+  check(await p.locator("h1").textContent() === "Suggest a clone", `${label}: the Suggest page opens`);
+  await axe(p, `${label} suggest page`);
 
   check(!errors.length, `${label}: no script errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   await p.close();
