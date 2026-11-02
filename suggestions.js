@@ -53,3 +53,35 @@ export function outcome(s, { groups, results, rejected, site }) {
     return ["❌ The AI filter judged this post not to be a clone announcement (for example news, a tip, or a list of tools), so it isn't listed.", false];
   return ["🔍 Nothing to list yet. No X post links it in the last 6 months, and it isn't an established open-source app with 1,000+ GitHub stars updated in the last 6 months. Flattery rates clones by how people react on X, so it will be picked up once someone posts about it (with #FlatteryAdd, for example).", false];
 }
+
+// Suggestions from the Suggest page: messages on the site's ntfy.sh channel (no sign-up). ntfy.sh
+// keeps messages 12 hours; scans run every 8, and `seen` (message ids already read) avoids repeats.
+export function parseNtfy(text) {
+  const out = [];
+  for (const line of String(text || "").split("\n")) {
+    let ev; try { ev = JSON.parse(line); } catch { continue; }
+    if (ev?.event !== "message") continue;
+    let m = {}; try { m = JSON.parse(ev.message); } catch { m = { link: ev.message }; }
+    out.push({ id: ev.id, time: ev.time, link: String(m.link || "").trim().slice(0, 300), note: String(m.note || "").trim().slice(0, 200) });
+  }
+  return out;
+}
+export async function ntfyAnswers(topic, seen, log) {
+  if (!topic) return [];
+  try {
+    const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}/json?poll=1&since=12h`, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) { log(`suggest page: ntfy answered ${res.status}`, "warn"); return []; }
+    return parseNtfy(await res.text()).filter(m => !seen.has(m.id)).slice(0, 30);
+  } catch (e) { log(`suggest page: ${e.message}`, "warn"); return []; }
+}
+
+// A one-line result for the Suggest page's "Recently suggested" list
+export function logEntry(link, [text], ctx, today) {
+  const s = parseSuggestion(link);
+  const repos = new Set(s.repos.map(r => r.toLowerCase()));
+  const card = ctx.groups.find(g => g.status === "ok" && ((g.repo && repos.has(g.repo.toLowerCase())) || g.posts?.some(p => s.ids.includes(p.id))));
+  if (card) return { at: today, link, code: card.code, name: card.project || card.repo };
+  const result = text.startsWith("👀") ? "found, waiting for reactions on X" : text.startsWith("❌") ? "not a clone announcement"
+    : text.startsWith("No link") ? "not a GitHub or X link" : "nothing to list yet";
+  return { at: today, link: link.slice(0, 120), result };
+}

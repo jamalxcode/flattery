@@ -185,6 +185,7 @@ await writeFile(`${a.out}/sitemap.xml`, `<?xml version="1.0" encoding="UTF-8"?>
 <url><loc>${SITE}</loc><lastmod>${day}</lastmod><changefreq>daily</changefreq></url>
 ${live.map(g => `<url><loc>${SITE}p/${g.code}/</loc><lastmod>${(g.history?.at(-1)?.at || day)}</lastmod></url>`).join("\n")}
 <url><loc>${SITE}alternatives/</loc><lastmod>${day}</lastmod></url>
+<url><loc>${SITE}suggest/</loc><lastmod>${day}</lastmod></url>
 ${[...byApp.keys()].map(app => `<url><loc>${SITE}alternatives/${slug(app)}/</loc><lastmod>${day}</lastmod></url>`).join("\n")}
 </urlset>
 `);

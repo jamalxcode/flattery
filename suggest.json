@@ -1,0 +1,4 @@
+{
+  "_about": "The Suggest page (flattery.sala.company/suggest/) sends each suggestion as a message to this ntfy.sh channel: free, no sign-up. Each scan reads the channel (ntfy.sh keeps messages 12 hours, and scans run every 8). Follow the channel in the ntfy app to see suggestions arrive. Empty: the page offers only #FlatteryAdd on X.",
+  "ntfy_topic": "flattery-suggest-8ec650ef9af9"
+}

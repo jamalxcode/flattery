@@ -52,7 +52,7 @@ A separate section for mature open-source apps that replace a paid one: Kdenlive
 
 | Button | What it posts | What happens |
 |---|---|---|
-| ＋ **Suggest a clone** (on the site) | a GitHub form with one field: the link | No X needed. Each scan reads the open suggestions, checks them like #FlatteryAdd posts, replies on each with the result and closes it (`suggestions.js`). |
+| ＋ **Suggest a clone** (on the site) | the link, on flattery.sala.company/suggest/ | No sign-up anywhere. The page sends it to the site's [ntfy.sh](https://ntfy.sh) channel (`suggest.json`); each scan reads the channel, checks the link like a #FlatteryAdd post, and the Suggest page lists what became of recent suggestions. Follow the channel in the ntfy app to see suggestions arrive. |
 | **#FlatteryAdd** (on X) | `#FlatteryAdd <link>` | The scan looks up the linked X post, or searches X for posts linking the GitHub repo, and judges them like any other. |
 | ✅ **It works** / ❌ **It's broken** | `#FlatteryWorks` / `#FlatteryBroken <code>` | One vote per established account (30+ days old, 10+ followers). 3+ works adds to the score; 3+ broken takes some off. |
 | ⚑ **Object on X** | `#FlatteryRemove <code>` with a reason | The listing comes down once **6** objections count. Each must come from a different established account and give a real reason (judged by Haiku). At most 2 count per 30 minutes, and the first and last must be at least 2 hours apart. |

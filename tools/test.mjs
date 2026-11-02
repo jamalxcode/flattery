@@ -388,6 +388,11 @@ assert.equal(score({ ...loved, github: undefined, repo: null }, T0).verdict, "st
   const [text, done] = outcome({ ids: [], repos: ["kde/kdenlive"] }, { groups: [{ status: "ok", repo: "KDE/kdenlive", project: "Kdenlive", code: "frx", reception: { verdict: "established" }, posts: [] }], results: [], rejected: new Set(), site: "S/" });
   assert.ok(done && text.includes("S/p/frx/"), "an added suggestion links its page");
   assert.equal(outcome({ ids: ["9"], repos: [] }, { groups: [], results: [], rejected: new Set(["9"]), site: "" })[1], false);
+  const { parseNtfy, logEntry } = await import("../suggestions.js");
+  assert.deepEqual(parseNtfy('{"id":"a1","time":1,"event":"open"}\n{"id":"m1","time":2,"event":"message","message":"{\\"link\\":\\"https://github.com/a/b\\",\\"note\\":\\"x\\"}"}\n'),
+    [{ id: "m1", time: 2, link: "https://github.com/a/b", note: "x" }]);
+  const ctx = { groups: [{ status: "ok", repo: "a/b", project: "B", code: "frb", posts: [] }], results: [], rejected: new Set() };
+  assert.equal(logEntry("https://github.com/a/b", ["✅"], ctx, "2026-11-02").code, "frb");
 }
 
 // Only real app names count as what a project clones
