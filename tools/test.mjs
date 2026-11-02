@@ -148,6 +148,14 @@ assert.match(oauthHeader("POST", "https://api.twitter.com/1.1/statuses/update.js
   assert.deepEqual(todo.map(t => t.key), ["news:2026-10-27", "loved:g1"]);
   assert.ok(todo.every(t => t.text.includes("flattery.sala.company") && t.text.length <= 300));
   assert.equal(postsToMake([g], {}, { "loved:g1": "2026-10-31" }, { today: "2026-10-31" }).length, 0);
+  // Alerts go to ntfy as JSON with the title, message and link
+  const { sendAlerts } = await import("../xpost.js");
+  const sentBodies = [], f0 = globalThis.fetch;
+  globalThis.fetch = async (u, o) => { sentBodies.push([u, JSON.parse(o.body)]); return { ok: true }; };
+  const keys = await sendAlerts("t1", todo, log);
+  globalThis.fetch = f0;
+  assert.deepEqual(keys, ["news:2026-10-27", "loved:g1"]);
+  assert.ok(sentBodies[1][1].title.startsWith("❤️") && sentBodies[1][1].click.includes("/p/frabcde/") && sentBodies[1][1].topic === "t1");
 }
 
 // GitHub takes priority: a huge repo behind a tiny X post is loved; a scam flag still wins

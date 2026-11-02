@@ -37,6 +37,8 @@ const CHECKPOINTS = [["1h", 1], ["24h", 24], ["7d", 168]];
 const REPLY_WINDOW_H = 6.5 * 24; // recent search only reaches 7 days back
 const WEEK = 7 * 864e5;
 
+const normName = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
 // A real app's name, not a placeholder or a category
 // Words that describe a kind of software, not a product: "Website", "Ad blocker", "Memory Optimizer"
 const GENERIC_WORDS = new Set(("a an the my your free paid open source online web website websites site sites page app apps application applications " +
@@ -88,7 +90,10 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
   try {
     // 1. Refresh
     const due = [...catalog.values()].filter(e => e.status !== "gone" &&
-      (ageH(e) < 8 * 24 || (ageH(e) < 30 * 24 && now - Date.parse(e.metrics_at) > 24 * 36e5) || now - Date.parse(e.metrics_at) > WEEK));
+      // Every scan for a post's first 2 days (when its numbers move fast), then about daily up to
+      // 30 days, then weekly: most of a scan's X reads are these re-checks, and a bigger catalog
+      // would otherwise use up the monthly budget
+      (ageH(e) < 48 || (ageH(e) < 30 * 24 && now - Date.parse(e.metrics_at) > 20 * 36e5) || now - Date.parse(e.metrics_at) > WEEK));
     if (due.length) {
       if (sources) {
         const other = await sources.refresh(due.filter(e => !isX(e)));
@@ -629,7 +634,9 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
   const quiet = g => ["too-early", "faded"].includes(g.reception.verdict) && now - Date.parse(g.created_at) > 14 * 864e5 &&
     g.metrics.likes < 20 && !(g.reception.repo_counted && g.github?.stars >= 20) && !g.trials;
   // and ones nobody has reacted to at all yet that link no repo (they appear once they get likes)
-  const unnoticed = g => g.reception.verdict === "too-early" && g.metrics.likes < 3 && !g.repo;
+  // (brand-new ones need 5 likes in their first 3 days, then 3)
+  const unnoticed = g => g.reception.verdict === "too-early" && !g.repo &&
+    (g.metrics.likes < 3 || (g.metrics.likes < 5 && now - Date.parse(g.created_at) < 3 * 864e5));
   // and ones that don't name a real app they clone: "Not specified", or a kind of thing rather
   // than a product ("Reverse engineering tools", "paid TTS services"). A clone catalog lists
   // clones of something; a general tool like a reverse-engineering kit isn't one.
@@ -749,6 +756,15 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
     if (want.length) log(`compare: ${want.filter(g => compare[g.id]?.at === today).length} of ${want.length} projects compared with the original`);
   }
   for (const g of groups) if (compare[g.id]) g.compare = compare[g.id];
+
+  // A card is never named after the app it clones: "Cursor" rated ☠️ would read as a verdict on
+  // Cursor itself. Such a card shows as "Cursor clone" (render.js) until it has a name of its own.
+  for (const g of groups) {
+    if (g.reception.verdict === "established") continue;
+    const own = g.project || g.display_name;
+    const orig = [g.original_clean, g.original, g.product?.name, g.product && `${g.product.vendor} ${g.product.name}`].map(x => normName(x)).filter(Boolean);
+    if (own && orig.includes(normName(own))) { g.named_after_original = own; g.project = ""; g.display_name = ""; }
+  }
 
   // Self-check: a card whose posts link a GitHub repo should show a repo. The only accepted
   // reason not to is a famous repo that isn't this project (Linux behind "Ginux"); anything

@@ -132,6 +132,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
       <div class="store">
         <nav class="side" aria-label="Browse">
           <a class="suggest" href="suggest/" data-goat="suggest">＋ Suggest a clone</a>
+          <a class="follow" href="https://ntfy.sh/flattery-sala-alerts" target="_blank" rel="noopener" data-goat="follow" title="Free alerts in the ntfy app or your browser: newly loved apps and the weekly newsletter. No sign-up.">🔔 Follow new apps</a>
           <div class="side-group" data-r="side"></div>
           <p class="side-note" data-r="sideNote" hidden></p>
           <h3 class="side-h" data-r="catsH">Categories</h3>
@@ -387,7 +388,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   // Anyone can post an issue from their own X account, with its top picks and a link back
   const issueShare = n => `<a class="xshare" href="${esc(xIntent(`📰 This week in clones: ${n.title}\n\n${n.items.slice(0, 3).map(i => `${rating(i.verdict)[1]} ${i.name}`).join("\n")}\n\nRated by the crowd on Flattery:`, SITE + "#news"))}" target="_blank" rel="noopener" data-goat="share-newsletter">Share this issue on X</a>`;
   const issueHtml = (n, latest) => `<div class="issue">
-      ${latest ? `<div class="issue-share">${issueShare(n)}</div>` : ""}
+      ${latest ? `<div class="issue-share">${issueShare(n)} <a class="xshare follow-x" href="https://ntfy.sh/flattery-sala-alerts" target="_blank" rel="noopener" data-goat="follow">🔔 Follow</a></div>` : ""}
       <p class="issue-date">${latest ? "📰 This week in clones · " : ""}${esc(new Date(n.date + "T12:00:00Z").toLocaleDateString("en", { day: "numeric", month: "long", year: "numeric" }))}</p>
       <h${latest ? 2 : 3}>${esc(n.title)}</h${latest ? 2 : 3}><p>${esc(n.intro)}</p>
       <ul>${n.items.map(i => `<li><button type="button" data-open="${esc(i.id)}">${rating(i.verdict)[1]} <b>${esc(i.name)}</b></button> ${esc(i.blurb)}</li>`).join("")}</ul>

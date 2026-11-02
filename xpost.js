@@ -59,3 +59,21 @@ export function postsToMake(groups, info, posted, { today, max = 3 } = {}) {
   }
   return out.slice(0, max);
 }
+
+// The same posts, as alerts on the site's public ntfy.sh channel (🔔 Follow on the site): free,
+// no keys, no sign-up for followers. Published as JSON (titles carry emoji, which headers can't).
+// Returns the keys sent.
+export async function sendAlerts(topic, items, log) {
+  const sent = [];
+  for (const it of items) {
+    const [first, ...rest] = it.text.split("\n").filter(Boolean);
+    const url = (it.text.match(/https:\/\/flattery\.sala\.company\/\S*/) || ["https://flattery.sala.company/"])[0];
+    const body = { topic, title: first.slice(0, 120), message: rest.filter(l => !l.startsWith("http")).join("\n").slice(0, 600) || first, click: url,
+      tags: [it.key.startsWith("news:") ? "newspaper" : "heart"] };
+    try {
+      const res = await fetch("https://ntfy.sh/", { method: "POST", body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+      if (res.ok) sent.push(it.key); else log(`alerts: ntfy answered ${res.status}`, "warn");
+    } catch (e) { log(`alerts: ${e.message}`, "warn"); }
+  }
+  return sent;
+}
