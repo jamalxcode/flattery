@@ -109,7 +109,7 @@ select { height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid 
 .card { position: relative; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); }
 .card:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
 .card.gone { opacity: .55; }
-.card.r-faded { opacity: .8; }
+.card.r-faded .icon { opacity: .75; }  /* dims the icon only: dimmed text would fail contrast */
 .icon { width: 64px; height: 64px; border-radius: 15px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 1.45rem; letter-spacing: -0.03em;
   background: radial-gradient(120% 90% at 0% 0%, hsl(var(--h) 85% 64%), transparent 60%), linear-gradient(135deg, hsl(var(--h) 70% 42%), hsl(calc(var(--h) + 50) 65% 24%));
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 2px 6px -2px rgba(0,0,0,.3); }
@@ -383,3 +383,5 @@ footer a { text-decoration: none; font-weight: 600; }
    under a picture, so it isn't read as low-contrast text */
 .art:has(img) .tile-mark, .art:has(img) .tile-of { visibility: hidden; }
 .side-item[aria-pressed="true"] .n { color: inherit; }
+.static-card .crumbs { font-size: .85rem; color: var(--text-muted); margin-bottom: 8px; }
+.static-card ul, .static-card ol { color: var(--text-muted); padding-left: 1.2em; margin-bottom: 12px; }

@@ -766,6 +766,23 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
     if (own && orig.includes(normName(own))) { g.named_after_original = own; g.project = ""; g.display_name = ""; }
   }
 
+  // Readable, permanent addresses (app/<slug>/): from the card's name the first time it's seen,
+  // then kept for good, so links never change; a clash gets the card's code appended
+  const slugs = { ...(fromX ? prev.info.slugs || {} : {}) };
+  {
+    const used = new Set(Object.values(slugs));
+    const slugify = t => String(t || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+    for (const g of groups) {
+      if (!slugs[g.id] && g.code) {
+        const w = g.product ? (g.product.vendor === g.product.name ? g.product.name : `${g.product.vendor} ${g.product.name}`) : g.original_clean || g.original;
+        const base = slugify(g.project || g.display_name || g.repo?.split("/")[1] || (w ? `${w} clone` : "")) || g.code;
+        const s = used.has(base) ? `${base}-${g.code.slice(2)}` : base;
+        slugs[g.id] = s; used.add(s);
+      }
+      if (slugs[g.id]) g.slug = slugs[g.id];
+    }
+  }
+
   // Self-check: a card whose posts link a GitHub repo should show a repo. The only accepted
   // reason not to is a famous repo that isn't this project (Linux behind "Ginux"); anything
   // else is a bug, logged every run and shown in the page's Status section.
@@ -807,6 +824,7 @@ export async function run(prev, opts, { x, haiku, githubStats, githubImage, gith
       compare,
       established_meta: estMeta,
       established_added: estAdded,
+      slugs,
       newsletter: await newsletter(),
       counts,
     },

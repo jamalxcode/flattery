@@ -174,11 +174,22 @@ Every suggestion goes through the same checks as anything found by search. Nothi
 2. **Claude:** each scan reads replies for up to 20 posts, compares up to 6 projects with their original, and gives second opinions on up to 15.
 3. **Free services only** for everything else: GitHub Pages and Actions, cron-job.org, ntfy.sh, GoatCounter.
 
-## 13. Data and safety
+## 13. Pages and search engines
+
+1. **Addresses:** each card's page is `app/<slug>/`, the slug made from its name the first time it's seen and **never changed**, so links keep working (`info.slugs`). The old `p/<code>/` addresses forward there.
+2. **Indexed or not:** 🆕 New & untested and 🌫️ Didn't catch on pages carry `noindex` and stay out of the sitemap until they're rated. Category, rating and system pages with fewer than 3 indexable apps are `noindex` too.
+3. **Landing pages:** a page per category (`category/<name>/`), for ❤️ Loved, ⭐ Proven and 🏛️ Established, and for Mac, Windows and Linux (❤️, ⭐ or 🏛️ apps with an installer for that system).
+4. **Titles** say what people search ("<name>: Free <app> Alternative"), with no emoji. Descriptions give the rating, what it is and its likes or stars.
+5. **IndexNow:** after each deploy, the sitemap's pages changed in the last day are sent to IndexNow.
+6. **Pictures** are stored as WebP: README pictures at most 800px wide, icons at most 160px.
+
+*(`tools/pages.mjs`, `tools/indexnow.mjs`, `pipeline.js`, `tools/scan.mjs`)*
+
+## 14. Data and safety
 
 1. **The catalog never shrinks.** A scan refuses to save one smaller than the last, and on any failure the last good data stays published.
 2. **Deleted X posts** stay as *removed*, with their text dropped (X's terms).
-3. **Pictures and icons** are copied to the site's own `data` branch, never hot-linked. SVG is never stored, since it could run scripts on the site's domain.
+3. **Pictures and icons** are copied to the site's own `data` branch as WebP, never hot-linked. SVG is never stored, since it could run scripts on the site's domain.
 4. **Post text is untrusted:** every prompt tells Claude never to follow instructions inside it, and everything is escaped on the page.
 5. **Self-check:** a card whose posts link a GitHub repo it doesn't show is logged as a bug, unless it's a famous unrelated repo.
 6. **Everything on the site is crowd opinion**, collected and summarised automatically: not a legal or technical judgement.

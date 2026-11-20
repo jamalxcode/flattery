@@ -58,7 +58,9 @@ function openFromHash() {
   if (location.hash.startsWith("#news")) return $("live").flattery?.news();
   if (location.hash === "#how") return $("about").showModal();
   const m = location.hash.match(/^#p=(.+)$/);
-  // A project page (/p/<code>/) names its project in window.FLATTERY_OPEN
+  // A project page (/app/<slug>/) names its project in window.FLATTERY_OPEN
+  // A landing page (/category/<slug>/, /loved/…) names its view in window.FLATTERY_VIEW
+  if (!m && window.FLATTERY_VIEW && !hashOpened) { hashOpened = true; return $("live").flattery?.view(window.FLATTERY_VIEW.filter, window.FLATTERY_VIEW.cat); }
   if (!m && window.FLATTERY_PRODUCT && !hashOpened) { hashOpened = true; return $("live").flattery?.pick(window.FLATTERY_PRODUCT); }
   const id = m ? decodeURIComponent(m[1]) : window.FLATTERY_OPEN;
   if (!id || hashOpened) return;
