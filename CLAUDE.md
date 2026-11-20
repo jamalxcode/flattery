@@ -4,7 +4,7 @@ This file guides Claude Code when working in this repository.
 
 ## Overview
 
-Flattery (live at https://flattery.sala.company) is an "app store" of free software clones (reverse-engineered, reimagined, white-room, vibe-coded copies of paid apps). A scheduled Node pipeline finds candidates on X and Hacker News, has Claude Haiku triage them and read the replies, confirms usage on GitHub, scores and rates them (Loved, Proven, Hyped, Mixed, New, Didn't catch on, Don't touch), and publishes a JSON catalog. The site is static vanilla HTML/CSS/JS rendered from that catalog; generated pages (`p/<code>/`, `alternatives/`, `stats/`, sitemap, RSS) are written at deploy time, not committed. Fully automated: nobody reviews listings by hand.
+Flattery (live at https://flattery.sala.company) is an "app store" of free software clones (reverse-engineered, reimagined, white-room, vibe-coded copies of paid apps). A scheduled Node pipeline finds candidates on X and Hacker News, has Claude Haiku triage them and read the replies, confirms usage on GitHub, scores and rates them (Loved, Proven, Hyped, Mixed, New, Didn't catch on, Don't touch), and publishes a JSON catalog. The site is static vanilla HTML/CSS/JS rendered from that catalog; generated pages (`app/<slug>/` with `p/<code>/` redirects, `alternatives/`, `category/`, rating and system landing pages, `stats/`, sitemap, RSS) are written at deploy time, not committed. Fully automated: nobody reviews listings by hand.
 
 ## Commands
 
@@ -15,12 +15,13 @@ npm ci
 npm test                         # node tools/test.mjs: whole pipeline offline vs. stubbed X/Haiku/GitHub
 npm run scan                     # node tools/scan.mjs (needs X_BEARER_TOKEN, ANTHROPIC_API_KEY, GITHUB_TOKEN)
 node tools/scan.mjs --cache data/latest.json --out data
-node tools/pages.mjs --data data/latest.json --out .     # = npm run pages: project + alternatives pages, sitemap
+node tools/pages.mjs --data data/latest.json --out .     # = npm run pages: home, project, alternatives and landing pages, sitemap
 node tools/stats.mjs --data data/latest.json --out .     # stats page
 node tools/slim.mjs --data data/latest.json --out data/site.json   # what the page loads
 node tools/cards.mjs --data data/latest.json             # = npm run cards: share images (Playwright)
 node tools/ui-check.mjs --root .                         # page check in Chromium + axe-core (needs data/latest.json and data/site.json)
 node tools/check-fresh.mjs                               # live catalog freshness check
+node tools/indexnow.mjs --sitemap sitemap.xml            # tell IndexNow engines what changed (runs after deploy)
 ```
 
 To get a real catalog locally: `git fetch origin data` and extract `latest.json` (as `pr-check.yml` does). No lint script. Scan flags: `--max-reads`, `--per-query`, `--products-per-run`, `--max-reactions`, `--budget-sec`, `--rotate`, `--backfill-days`, `--search`, `--repos`.
@@ -61,5 +62,7 @@ Docs: `docs/BUSINESS-RULES.md` (every rule, keep in sync with code) and `docs/DE
 - Keep the GoatCounter snippet (endpoint `https://salacompany.goatcounter.com/count`) intact in `index.html`, `suggest/index.html`, and the `GOATCOUNTER` constant in `analytics.js` (used by tool-written pages). The site also fires custom GoatCounter events.
 - A scan must never save a smaller catalog than the last; on failure the previous catalog is republished. Preserve that safety.
 - A card is never named after the app it clones (shows "<app> clone").
+- A card's slug (`app/<slug>/`) is fixed the first time it's seen and kept in `info.slugs`; never rename existing slugs, links depend on them.
+- Thumbnails are stored as resized WebP via `sharp` (`tools/scan.mjs`, `store`).
 - WCAG AA contrast in light/dark and no sideways scrolling on phones are checked by `ui-check.mjs`; on phones secondary links move into a menu and categories become chips.
 - Post content can be in many languages; names prefer plain letters matching the repo.

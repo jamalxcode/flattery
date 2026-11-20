@@ -225,6 +225,13 @@ assert.equal(by(r2, "p1").history[0].verdict, "well-received");
 // Backfill: full-archive search adds the older popular post (the tiny p4 is skipped)
 posts.p9 = oldPost;
 const x3 = new X("token", log, { maxReads: 3000 });
+// Readable addresses: every card gets a slug, and keeps it on later scans even if its name changes
+{
+  const withCode = r1.groups.filter(g => g.code);
+  assert.ok(withCode.length && withCode.every(g => /^[a-z0-9-]+$/.test(g.slug)), "every card gets a slug");
+  assert.equal(new Set(withCode.map(g => g.slug)).size, withCode.length, "slugs are unique");
+  for (const g of r2.groups) if (r1.info.slugs[g.id]) assert.equal(g.slug, r1.info.slugs[g.id], "a card keeps its slug");
+}
 const r3 = await run(r2, { perQuery: 50, productsPerRun: 1, backfillDays: 21, maxReactions: 40 }, { x: x3, haiku, githubStats, log, now: T0 + 48 * H });
 assert.ok(by(r3, "p9"), "backfill finds the older post");
 assert.ok(by(r3, "p9").found_by.some(f => f.startsWith("backfill")));

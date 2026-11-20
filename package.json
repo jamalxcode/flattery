@@ -9,7 +9,8 @@
     "cards": "node tools/cards.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "1.3.0"
+    "@anthropic-ai/sdk": "1.3.0",
+    "sharp": "0.33.5"
   },
   "devDependencies": {
     "axe-core": "4.10.2",

@@ -10,7 +10,7 @@ import { parseArgs } from "node:util";
 const { values: a } = parseArgs({ options: { data: { type: "string", default: "data/latest.json" }, out: { type: "string", default: "data/site.json" } } });
 const { info = {}, groups = [] } = JSON.parse(await readFile(a.data, "utf8"));
 
-const GROUP = ["id", "code", "status", "project", "display_name", "repo", "foreign_repo", "original", "original_clean", "product", "kind", "category",
+const GROUP = ["id", "code", "slug", "status", "project", "display_name", "repo", "foreign_repo", "original", "original_clean", "product", "kind", "category",
   "summary", "url", "source", "created_at", "metrics", "reception", "history", "group", "objections", "trials", "second_opinion", "compare", "thumb", "icon"];
 const GITHUB = ["status", "repo", "stars", "forks", "downloads", "license", "platforms", "get", "homepage", "created", "pushed_at", "commits_30d", "image"];
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o?.[k] !== undefined).map(k => [k, o[k]]));

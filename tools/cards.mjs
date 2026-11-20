@@ -84,7 +84,8 @@ let index = {};
 try { index = JSON.parse(await readFile(`${ogDir}/index.json`, "utf8")); } catch {}
 
 const key = g => createHash("sha1").update(JSON.stringify([name(g), g.reception.verdict, g.reception.score, num(g.metrics.likes),
-  g.reception.repo_counted && num(g.github?.stars), what(g), g.thumb])).digest("hex").slice(0, 12);
+  // (the picture by name, not format: converting it to WebP doesn't redraw the card)
+  g.reception.repo_counted && num(g.github?.stars), what(g), g.thumb?.replace(/\.\w+$/, "")])).digest("hex").slice(0, 12);
 const stale = live.filter(g => index[g.code] !== key(g) || !existsSync(`${ogDir}/${g.code}.png`));
 const todo = stale.slice(0, +a.max);
 

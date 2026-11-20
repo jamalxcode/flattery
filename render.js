@@ -39,7 +39,7 @@ function renderReport(root, DATA, INFO, opts = {}) {
   // Each project's own page (static, with its own preview image for sharing)
   const slug = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const altUrl = e => what(e) ? `${SITE}alternatives/${slug(what(e))}/` : "";
-  const pageUrl = e => e.code ? `${SITE}p/${e.code}/` : `${SITE}#p=${encodeURIComponent(e.id)}`;
+  const pageUrl = e => e.slug ? `${SITE}app/${e.slug}/` : e.code ? `${SITE}p/${e.code}/` : `${SITE}#p=${encodeURIComponent(e.id)}`;
   const src = e => e.source === "hn" ? "Hacker News" : e.source === "reddit" ? "Reddit" : "X";
   const unrated = v => v === "too-early" || v === "faded";
   // Established apps have a section of their own; the clone views (Discover, the ratings) leave them out
@@ -419,6 +419,12 @@ function renderReport(root, DATA, INFO, opts = {}) {
     <li>${num(live.length)} projects from ${num(DATA.reduce((s, e) => s + (e.posts?.length || 1), 0))} posts</li></ul>`;
 
   root.flattery = {
+    // Show a view and/or category (used by the /category/<slug>/ and rating landing pages)
+    view(filter, cat) {
+      if (filter) root._filter = filter;
+      if (cat) root._cat = cat;
+      renderReport(root, root._data, root._info, opts);
+    },
     // Show one app's alternatives (used by /alternatives/<app>/ pages)
     pick(name) {
       const sel = $("product");

@@ -27,7 +27,7 @@ Everything runs by itself. Nobody reviews listings, ratings, objections or the n
   - **Get** downloads the installer for the visitor's system from the project's newest GitHub release (`.dmg`, `.exe`/`.msi`, `.AppImage`, `.apk`; universal or Apple-chip builds on Mac, x64 on Windows and Linux). It's offered only for ❤️ and ⭐ apps whose repo is at least 2 weeks old with 50+ stars, with a note that Flattery doesn't check downloads.
   - **Open** links a project's web app, for anything but ☠️.
 - **Icons:** the README's logo or the organisation's avatar, or the maker's X picture when the poster built it, with initials as the fallback. They're copied to the `data` branch, never hot-linked; SVG is skipped.
-- **Sharing**, from the visitor's own X account: ❤️ *Share as my favourite*, *Share on X* and *Copy link* on every app, and *Share this issue on X* in the newsletter. Each project has its own page, `p/<code>/`, with its own preview image (`data/og/<code>.png`), so a shared link shows that project.
+- **Sharing**, from the visitor's own X account: ❤️ *Share as my favourite*, *Share on X* and *Copy link* on every app, and *Share this issue on X* in the newsletter. Each project has its own page, `app/<name>/` (old `p/<code>/` links forward there), with its own preview image (`data/og/<code>.png`), so a shared link shows that project.
 - **Newsletter:** *This week in clones*, written weekly by Haiku from the week's rating changes. It opens in a drawer (📰) that never covers the cards, with past issues below, and is also in the RSS feed.
 - **How it works** (ℹ️) explains the ratings in a drawer. On phones, Stats, How it works, Free alternatives, Suggest and Follow move into a ⋯ menu.
 - **Suggest a clone** (`suggest/`): a page with one field for a link. No sign-up anywhere; see [Anyone can take part](#anyone-can-take-part).
@@ -37,10 +37,15 @@ Everything runs by itself. Nobody reviews listings, ratings, objections or the n
   - Each page has an intro written from the data (best received, ready to install, runs in the browser) and an `alternatives/` index.
 - **Stats:** `stats/` shows the most-cloned companies and apps, clones per week, ratings by category, the fastest-growing repos, and builders with their hit rate.
 - **For search engines:**
-  - each project page's plain HTML (what crawlers read before the app loads) has the comparison with the original, *Can I use it?* and what people said, under headings like "PhotoCraft vs Adobe Photoshop";
-  - project pages carry schema.org `SoftwareApplication` data (free, systems, repo; no star rating is claimed);
-  - alternatives pages carry an `ItemList`;
-  - there's a sitemap and robots.txt.
+  - every page's plain HTML (what crawlers read before the app loads) carries real content: the home page lists the most loved, established and proven apps and links every category; each project page has the comparison with the original, *Can I use it?*, what people said, breadcrumbs, and links to other alternatives to the same app and the same category;
+  - readable, permanent addresses: `app/<name>/` (the name is fixed the first time a card is seen, so links never break);
+  - titles and descriptions written the way people search ("PhotoCraft: Free Photoshop Alternative"), without emoji;
+  - landing pages: `category/<name>/` for each category, `loved/`, `established/`, `proven/`, and `mac/`, `windows/`, `linux/` for apps with an installer for that system;
+  - schema.org data: `SoftwareApplication` on project pages (free, systems, repo; no star rating is claimed), `BreadcrumbList`, `ItemList` on list pages, `WebSite` on the home page;
+  - 🆕 New & untested and 🌫️ Didn't catch on pages are `noindex` and left out of the sitemap until they're rated, so search engines see only pages worth showing; the same goes for landing pages with fewer than 3 such apps;
+  - after each deploy, changed pages are sent to **IndexNow** (Bing, Yandex and others), so they're crawled within hours;
+  - pictures and icons are stored as WebP, resized to what the page shows (pictures 800px wide, icons 160px);
+  - a sitemap and robots.txt.
 - **Light page:** the page loads `data/site.json`, only what it shows (about 100 KB compressed); the full `data/latest.json` stays published for RSS/JSON users.
 - **Accessible:** WCAG 2 AA contrast in light and dark themes, a correct heading order, and decorative tiles hidden from screen readers. An axe-core audit runs before every merge.
 - **Usage:** GoatCounter page views on every page, plus events for Get, Open, GitHub, shares, filters, categories, search, Surprise me, the newsletter, suggestions, follows, votes and objections.

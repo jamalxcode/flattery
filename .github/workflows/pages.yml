@@ -134,6 +134,10 @@ jobs:
           else git worktree add -q --orphan -b data "$store"; fi
           cp data/latest.json "$store/latest.json"
           if [ -d data/thumbs ]; then mkdir -p "$store/thumbs" && cp -r data/thumbs/. "$store/thumbs/"; fi
+          # Pictures converted to WebP: drop the old PNG/JPEG/GIF copy
+          for f in "$store"/thumbs/*.png "$store"/thumbs/*.jpg "$store"/thumbs/*.gif; do
+            [ -e "$f" ] && [ -e "${f%.*}.webp" ] && rm -f "$f"
+          done; true
           if [ -d data/og ]; then mkdir -p "$store/og" && cp -r data/og/. "$store/og/"; fi
           cd "$store"
           git add -A
@@ -143,8 +147,9 @@ jobs:
       - run: rm -rf node_modules
       # New file names each deploy, so browsers never keep running an old script
       - run: sed -i "s/__BUILD__/${GITHUB_SHA::7}/g" index.html suggest/index.html
-      # A page per project (p/<code>/) with its own title and preview, plus sitemap.xml
-      # and the "Free alternatives to X" pages and the stats page
+      # A page per project (app/<slug>/, old p/<code>/ addresses forward there) with its own
+      # title and preview, the "Free alternatives to X", category, rating and system pages,
+      # sitemap.xml and the stats page
       - name: Write project, alternatives and stats pages
         run: |
           if [ -s data/latest.json ]; then
@@ -156,3 +161,7 @@ jobs:
         with: { path: . }
       - id: deployment
         uses: actions/deploy-pages@v4
+      # IndexNow: tell Bing and the other engines that use it which pages changed
+      - name: Tell search engines what changed
+        continue-on-error: true
+        run: node tools/indexnow.mjs --sitemap sitemap.xml

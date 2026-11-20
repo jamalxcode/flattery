@@ -6,7 +6,7 @@
 //   node tools/ui-check.mjs [--root .]      (needs data/latest.json, and data/site.json from tools/slim.mjs, under the root;
 //                                            CHROMIUM=/path to use a local browser)
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium } from "playwright";
@@ -98,6 +98,25 @@ for (const [width, label] of [[1280, "desktop"], [390, "phone"]]) {
   await p.waitForTimeout(400);
   check(await p.locator("h1").textContent() === "Suggest a clone", `${label}: the Suggest page opens`);
   await axe(p, `${label} suggest page`);
+
+  // Search-engine pages: a project page opens its sheet, a category page shows that category,
+  // and an old /p/<code>/ address forwards to the new one
+  const appDir = (await readdir(join(a.root, "app")).catch(() => []))[0];
+  if (appDir) {
+    await p.goto(base + `app/${appDir}/`);
+    await p.waitForTimeout(1500);
+    check(await p.evaluate(() => document.querySelector("[data-r=sheet]")?.open), `${label}: a project page opens its project`);
+    await p.keyboard.press("Escape");
+    const code = (await readdir(join(a.root, "p")))[0];
+    const fwd = await readFile(join(a.root, "p", code, "index.html"), "utf8");
+    check(/http-equiv="refresh"[^>]*\/app\//.test(fwd) && /rel="canonical" href="[^"]*\/app\//.test(fwd), `${label}: an old project address forwards to /app/`);
+  }
+  const catDir = (await readdir(join(a.root, "category")).catch(() => []))[0];
+  if (catDir) {
+    await p.goto(base + `category/${catDir}/`);
+    await p.waitForTimeout(1500);
+    check(await p.locator('[data-r=cats] [aria-pressed="true"]').count() === 1, `${label}: a category page shows its category`);
+  }
 
   check(!errors.length, `${label}: no script errors${errors.length ? ": " + errors.join(" | ") : ""}`);
   await p.close();

@@ -55,7 +55,7 @@ export function postsToMake(groups, info, posted, { today, max = 3 } = {}) {
     g.history?.at(-1)?.at === today && !posted[`loved:${g.id}`]).sort((a, b) => b.reception.score - a.reception.score);
   for (const g of loved.slice(0, 2)) {
     const stars = g.reception.repo_counted && g.github?.stars ? ` · ★ ${g.github.stars.toLocaleString("en")} on GitHub` : "";
-    out.push({ key: `loved:${g.id}`, text: cut(`❤️ Now Loved on Flattery: ${label(g)}${of(g) ? `, a free take on ${of(g)}` : ""}${stars}\n\n${g.summary || ""}`, 245) + `\n${SITE}p/${g.code}/` });
+    out.push({ key: `loved:${g.id}`, text: cut(`❤️ Now Loved on Flattery: ${label(g)}${of(g) ? `, a free take on ${of(g)}` : ""}${stars}\n\n${g.summary || ""}`, 245) + `\n${SITE}${g.slug ? `app/${g.slug}` : `p/${g.code}`}/` });
   }
   return out.slice(0, max);
 }

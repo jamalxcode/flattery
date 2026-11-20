@@ -44,7 +44,7 @@ export function outcome(s, { groups, results, rejected, site }) {
   const card = groups.find(g => g.status === "ok" && ((g.repo && repos.has(g.repo.toLowerCase())) || g.posts?.some(p => s.ids.includes(p.id))));
   if (card) {
     const label = { established: "🏛️ Established", "well-received": "❤️ Loved", proven: "⭐ Proven on GitHub", unconfirmed: "🔥 Hyped, unproven", mixed: "😐 Mixed", "stay-away": "☠️ Don't touch", "too-early": "🆕 New & untested", faded: "🌫️ Didn't catch on" }[card.reception.verdict];
-    return [`✅ It's on Flattery: **${card.project || card.repo}**, rated ${label}.\n${site}p/${card.code}/`, true];
+    return [`✅ It's on Flattery: **${card.project || card.repo}**, rated ${label}.\n${site}${card.slug ? `app/${card.slug}` : `p/${card.code}`}/`, true];
   }
   const found = results.filter(e => s.ids.includes(e.id) || (e.repo && repos.has(e.repo.toLowerCase())));
   if (found.length)

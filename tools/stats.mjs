@@ -79,7 +79,7 @@ const stacked = `<div class="legend-row">${RATINGS.map(([, e, n, cls]) => `<span
 
 // Fastest-growing repos: stars per day since the repo was created
 const fast = repos.map(g => [g, g.stars / Math.max(1, days(g.created || info.generated_iso))]).sort((x, y) => y[1] - x[1]).slice(0, 10);
-const fastRows = fast.map(([g, r]) => [live.find(x => x.github === g) ? name(live.find(x => x.github === g)) : g.repo, Math.round(r), `${SITE}p/${live.find(x => x.github === g)?.code || ""}/`]);
+const fastRows = fast.map(([g, r]) => [live.find(x => x.github === g) ? name(live.find(x => x.github === g)) : g.repo, Math.round(r), (c => c?.slug ? `${SITE}app/${c.slug}/` : `${SITE}p/${c?.code || ""}/`)(live.find(x => x.github === g))]);
 
 // Builders: whose own repos count, how many projects, stars and hit rate
 const builders = new Map();

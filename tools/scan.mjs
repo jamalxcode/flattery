@@ -8,10 +8,11 @@
 // --backfill-days N also searches the full archive for the last N days (popular posts
 // only), for catching up; it needs full-archive search on the X plan.
 // --search "ArtCraft, Other" also looks for posts about those names (last --search-days days).
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { parseArgs } from "node:util";
+import sharp from "sharp";
 import { X } from "../x.js";
 import { Haiku } from "../haiku.js";
 import { repoStats, readmeImage, readmeText } from "../github.js";
@@ -115,16 +116,35 @@ if (prev?.info?.source === "x" && results.length < prev.results.length) {
 
 // Thumbnails: README screenshots copied into <out>/thumbs, so the page doesn't load images
 // from other people's servers (they break, change or track visitors). Kept on the data
-// branch between runs; up to 40 new ones a run.
+// branch between runs; up to 80 new ones a run. Saved as WebP, resized to what the page
+// shows (pictures 800px wide, icons 160px), so pages load fast; older PNG/JPEG/GIF copies
+// are converted in place.
 const thumbDir = `${a.out}/thumbs`;
 await mkdir(thumbDir, { recursive: true });
 const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
-let newThumbs = 0;
+let newThumbs = 0, converted = 0;
+const toWebp = async (buf, width) => {
+  try {
+    return await sharp(buf, { animated: true, limitInputPixels: 1e8 }).resize({ width, height: width === ICON_PX ? width : undefined, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 80, effort: 4 }).toBuffer();
+  } catch { return null; }
+};
+const ICON_PX = 160, PICTURE_PX = 800;
 // Copies an image into thumbs/ once (named by its URL's hash): returns its path, or null
-const store = async (url, maxBytes) => {
+const store = async (url, maxBytes, width = PICTURE_PX) => {
   const base = createHash("sha1").update(url).digest("hex").slice(0, 16);
-  const have = Object.values(EXT).map(x => `${base}.${x}`).find(f => existsSync(`${thumbDir}/${f}`));
-  if (have) return `thumbs/${have}`;
+  if (existsSync(`${thumbDir}/${base}.webp`)) return `thumbs/${base}.webp`;
+  const old = ["png", "jpg", "gif"].map(x => `${thumbDir}/${base}.${x}`).find(existsSync);
+  if (old) {
+    try {
+      const out = await toWebp(await readFile(old), width);
+      if (!out) return `thumbs/${old.split("/").pop()}`;
+      await writeFile(`${thumbDir}/${base}.webp`, out);
+      await rm(old, { force: true });
+      converted++;
+    } catch {}
+    return existsSync(`${thumbDir}/${base}.webp`) ? `thumbs/${base}.webp` : null;
+  }
   if (newThumbs >= 80) return null;
   newThumbs++;
   try {
@@ -134,8 +154,10 @@ const store = async (url, maxBytes) => {
     if (!res.ok || !ext) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length > maxBytes) return null;
-    await writeFile(`${thumbDir}/${base}.${ext}`, buf);
-    return `thumbs/${base}.${ext}`;
+    const out = await toWebp(buf, width);
+    if (!out) return null;
+    await writeFile(`${thumbDir}/${base}.webp`, out);
+    return `thumbs/${base}.webp`;
   } catch { return null; }
 };
 const wantThumbs = groups.filter(g => g.github && g.github.status !== "gone" && (g.github.image || g.github.logo || g.github.org_avatar));
@@ -144,16 +166,16 @@ const wantThumbs = groups.filter(g => g.github && g.github.status !== "gone" && 
 for (const g of groups) if (!wantThumbs.includes(g) && g.author_built_it && g.author?.avatar && g.status === "ok") wantThumbs.push({ ...g, github: {}, _avatarOnly: g });
 for (let i = 0; i < wantThumbs.length; i += 6) {
   await Promise.all(wantThumbs.slice(i, i + 6).map(async g => {
-    if (g._avatarOnly) { const t = await store(g.author.avatar, 3e5); if (t) g._avatarOnly.icon = t; return; }
+    if (g._avatarOnly) { const t = await store(g.author.avatar, 3e5, ICON_PX); if (t) g._avatarOnly.icon = t; return; }
     if (g.github.image) { const t = await store(g.github.image, 2.5e6); if (t) g.thumb = t; }
     // The row's icon: the README's logo, else the organisation's avatar
     for (const src of [g.github.logo, g.github.org_avatar].filter(Boolean)) {
-      const t = await store(src, 6e5);
+      const t = await store(src, 6e5, ICON_PX);
       if (t) { g.icon = t; break; }
     }
   }));
 }
-log(`thumbnails: ${groups.filter(g => g.thumb).length} pictures and ${groups.filter(g => g.icon).length} icons stored, ${newThumbs} fetched this run`);
+log(`thumbnails: ${groups.filter(g => g.thumb).length} pictures and ${groups.filter(g => g.icon).length} icons stored, ${newThumbs} fetched and ${converted} converted to WebP this run`);
 
 const now = new Date();
 const costPerRead = +(process.env.X_COST_PER_READ || 0);

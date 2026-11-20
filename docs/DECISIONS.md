@@ -136,6 +136,15 @@ Reads per scan fell from about 500 to about 220.
 
 **Why:** Google reads the HTML before any script runs, and a fake review rating would be misleading.
 
+**Second round (search engines):**
+- Readable addresses, `app/<name>/` instead of `p/<code>/`, fixed for good the first time a card is seen; old links forward.
+- Titles in the words people search ("Free Photoshop Alternative"), without emoji.
+- The home page carries real content; landing pages per category, rating and system; related links and breadcrumbs on every project page.
+- 🆕 and 🌫️ pages are `noindex` until rated: hundreds of thin pages would make search engines rate the whole site lower.
+- IndexNow after each deploy, and WebP pictures (184 MB of thumbnails became about 37 MB).
+
+**Still needs the owner:** verifying the site in Google Search Console and Bing Webmaster Tools, and links from other sites.
+
 ### 22. Accessible by default
 **Decision:**
 - An axe-core audit (WCAG 2 AA) of every main view, in light and dark themes, on desktop and phone.
