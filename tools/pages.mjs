@@ -8,6 +8,7 @@
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { postCode } from "../complaints.js";
 
 const SITE = "https://flattery.sala.company/";
 const { values: a } = parseArgs({ options: { data: { type: "string", default: "data/latest.json" }, out: { type: "string", default: "." } } });
@@ -62,9 +63,22 @@ const ogFor = code => existsSync(`${a.out}/data/og/${code}.png`) ? `${SITE}data/
 // Addresses: app/<slug>/ (the slug is kept for good by the scan); the code as a fallback
 const appPath = g => `app/${g.slug || g.code}/`;
 const appUrl = g => SITE + appPath(g);
-// Projects worth indexing: rated ones. New & untested and Didn't catch on pages exist (and are
-// linked) but carry "noindex" and stay out of the sitemap until they're rated.
-const indexable = g => !["too-early", "faded"].includes(g.reception.verdict);
+// Projects worth indexing: a page search engines should show. Thin pages make them rate the whole
+// site lower, so the rest exist (and are linked) but carry "noindex" and stay out of the sitemap:
+// - Loved and Established: always;
+// - Mixed: with something written about it (a comparison with the original, or a summary of the replies);
+// - Proven, Hyped and Don't touch: with that, and real use (300+ stars on its own repo, or 50+ likes);
+// - New & untested and Didn't catch on: never, until they're rated.
+const INDEX_STARS = 300, INDEX_LIKES = 50;
+const indexable = g => {
+  const v = g.reception.verdict;
+  if (["well-received", "established"].includes(v)) return true;
+  if (["too-early", "faded"].includes(v)) return false;
+  const written = !!(g.compare?.does?.length || g.compare?.verdict || g.sentiment?.summary);
+  if (v === "mixed") return written;
+  const used = (g.reception.repo_counted && (g.github?.stars || 0) >= INDEX_STARS) || (g.metrics?.likes || 0) >= INDEX_LIKES;
+  return used && written;
+};
 const noindex = html => html.replace("</head>", '<meta name="robots" content="noindex,follow">\n</head>');
 const withBase = html => html.replace(/<meta charset="utf-8">/, `<meta charset="utf-8">\n<base href="/">`);
 const KIND = { "reverse-engineered": "Reverse-engineered", reimagined: "Reimagined", port: "Port of", clone: "Clone of" };
@@ -169,6 +183,8 @@ function descriptionFor(g, stars) {
 
 await rm(`${a.out}/p`, { recursive: true, force: true });
 await rm(`${a.out}/app`, { recursive: true, force: true });
+// Card codes first, so a post that moved never takes over another card's own address
+const redirected = new Set(live.map(g => g.code));
 for (const g of live) {
   const [emo, rating] = LABEL[g.reception.verdict] || LABEL.mixed;
   const url = appUrl(g);
@@ -183,11 +199,16 @@ for (const g of live) {
   html = html.replace('<script src="render.js', `<script>window.FLATTERY_OPEN = ${JSON.stringify(g.id).replace(/</g, "\\u003c")};</script>\n<script src="render.js`);
   await mkdir(`${a.out}/${appPath(g)}`, { recursive: true });
   await writeFile(`${a.out}/${appPath(g)}index.html`, html);
-  // The old address p/<code>/ (shared links, the share images) forwards to the new one
-  await mkdir(`${a.out}/p/${g.code}`, { recursive: true });
-  await writeFile(`${a.out}/p/${g.code}/index.html`, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(name(g))} | Flattery</title>
+  // Old addresses p/<code>/ forward to the new one: the card's code and the code of each of its
+  // posts, so a link keeps working when posts merge into another card and its code changes
+  for (const code of new Set([g.code, ...(g.posts || []).map(p => postCode(p.id))])) {
+    if (redirected.has(code) && code !== g.code) continue;
+    redirected.add(code);
+    await mkdir(`${a.out}/p/${code}`, { recursive: true });
+    await writeFile(`${a.out}/p/${code}/index.html`, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(name(g))} | Flattery</title>
 <link rel="canonical" href="${esc(url)}"><meta name="robots" content="noindex,follow"><meta http-equiv="refresh" content="0; url=${esc(url)}"></head>
 <body><p><a href="${esc(url)}">${esc(name(g))} on Flattery</a></p></body></html>`);
+  }
 }
 
 // A short intro for each alternatives page, written from the data: how many, the best rated,

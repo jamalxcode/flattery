@@ -42,7 +42,7 @@ Everything runs by itself. Nobody reviews listings, ratings, objections or the n
   - titles and descriptions written the way people search ("PhotoCraft: Free Photoshop Alternative"), without emoji;
   - landing pages: `category/<name>/` for each category, `loved/`, `established/`, `proven/`, and `mac/`, `windows/`, `linux/` for apps with an installer for that system;
   - schema.org data: `SoftwareApplication` on project pages (free, systems, repo; no star rating is claimed), `BreadcrumbList`, `ItemList` on list pages, `WebSite` on the home page;
-  - 🆕 New & untested and 🌫️ Didn't catch on pages are `noindex` and left out of the sitemap until they're rated, so search engines see only pages worth showing; the same goes for landing pages with fewer than 3 such apps;
+  - weak pages are `noindex` and left out of the sitemap (🆕 and 🌫️ always; ⭐, 🔥 and ☠️ under 300 stars or 50 likes), so search engines see only pages worth showing; old `p/<code>/` links of every post forward to the app;
   - after each deploy, changed pages are sent to **IndexNow** (Bing, Yandex and others), so they're crawled within hours;
   - pictures and icons are stored as WebP, resized to what the page shows (pictures 800px wide, icons 160px);
   - a sitemap and robots.txt.
