@@ -176,8 +176,13 @@ Every suggestion goes through the same checks as anything found by search. Nothi
 
 ## 13. Pages and search engines
 
-1. **Addresses:** each card's page is `app/<slug>/`, the slug made from its name the first time it's seen and **never changed**, so links keep working (`info.slugs`). The old `p/<code>/` addresses forward there.
-2. **Indexed or not:** 🆕 New & untested and 🌫️ Didn't catch on pages carry `noindex` and stay out of the sitemap until they're rated. Category, rating and system pages with fewer than 3 indexable apps are `noindex` too.
+1. **Addresses:** each card's page is `app/<slug>/`, the slug made from its name the first time it's seen and **never changed**, so links keep working (`info.slugs`). The old `p/<code>/` addresses forward there: the card's code and the code of every post on it, so a link keeps working when posts merge into another card.
+2. **Indexed or not:** only pages worth showing in search are open to search engines; the rest carry `noindex` and stay out of the sitemap (they're still on the site and linked):
+   - ❤️ Loved and 🏛️ Established: always;
+   - 😐 Mixed: when there's something written about it (a comparison with the original, or a summary of the replies);
+   - ⭐ Proven, 🔥 Hyped and ☠️ Don't touch: that, plus real use (**300+ stars** on its own repo, or **50+ likes**);
+   - 🆕 New & untested and 🌫️ Didn't catch on: never, until they're rated.
+   Category, rating and system pages with fewer than 3 indexable apps are `noindex` too.
 3. **Landing pages:** a page per category (`category/<name>/`), for ❤️ Loved, ⭐ Proven and 🏛️ Established, and for Mac, Windows and Linux (❤️, ⭐ or 🏛️ apps with an installer for that system).
 4. **Titles** say what people search ("<name>: Free <app> Alternative"), with no emoji. Descriptions give the rating, what it is and its likes or stars.
 5. **IndexNow:** after each deploy, the sitemap's pages changed in the last day are sent to IndexNow.
